@@ -1,0 +1,41 @@
+{
+  "name": "esp",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Event sourced programming in Typescript",
+  "author": "Adam Johnston",
+  "license": "MIT",
+  "main": "src/esp.ts",
+  "source": "src/esp.ts",
+  "types": "dist/esp.d.ts",
+  "module": "dist/esp.module.js",
+  "exports": {
+    "types": "./dist/esp.d.ts",
+    "require": "./dist/esp.cjs",
+    "default": "./dist/esp.modern.js"
+  },
+  "publishConfig": {
+    "source": "src/esp.ts",
+    "main": "dist/esp.js"
+  },
+  "unpkg": "dist/esp.umd.js",
+  "scripts": {
+    "build": "microbundle --target node",
+    "dev": "microbundle watch --target node",
+    "test": "jest test",
+    "start": "node dist/esp.modern.js",
+    "clean": "rm -r dist &2> /dev/null"
+  },
+  "devDependencies": {
+    "microbundle": "^0.15.1",
+    "ts-node": "^10.9.1"
+  },
+  "dependencies": {
+    "@types/jest": "^29.2.2",
+    "@types/uuid": "^8.3.4",
+    "jest": "^29.3.1",
+    "rxjs": "^7.5.7",
+    "ts-jest": "^29.0.3",
+    "uuid": "^9.0.0"
+  }
+}
