@@ -1,6 +1,6 @@
-import { AnyMessage, IncomingMessage, OutgoingMessage, StoredMessage } from '../message';
-import { AggregateId, Channel, channelEquals, generateId, streamEquals } from '../stream';
-import { concat, concatMap, distinct, filter, from, fromEvent, map, Observable, of, shareReplay, Subscription, tap } from 'rxjs';
+import { AnyMessage, OutgoingMessage, StoredMessage } from '../message';
+import { AggregateId, channelEquals, generateId, streamEquals } from '../stream';
+import { concat, concatMap, distinct, filter, from, fromEvent, Observable, shareReplay, Subscription } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
 
@@ -60,7 +60,7 @@ export class MessageStore implements MessageStore {
         const obs = fromEvent(this._emitter, 'message') as Observable<StoredMessage<AnyMessage>>;
         this._messageStream = obs.pipe(
             shareReplay({
-                bufferSize: 1000,
+                bufferSize: 1000, // TODO(adam): Configurable
                 refCount: false,
             }),
         );
