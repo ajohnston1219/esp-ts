@@ -48,11 +48,9 @@ export type ChannelMessageCreators<Schema extends AnyChannelSchema> = {
     [Tag in ChannelTags<Schema>]: MessageCreator<ChannelSchemas<Schema, Tag>>;
 }
 
-export function getMessageCreators<Schema extends AnyChannelSchema>(schema: Schema) {
-    return Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => {
-        return {
-            ...acc,
-            [curr]: getMessageCreator<MessagePayload<typeof schema.schemas[string]>>(curr)
-        }
-    }, {} as any);
+export function getMessageCreators<Schema extends AnyChannelSchema>(schema: Schema): ChannelMessageCreators<Schema> {
+    return Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
+        ...acc,
+        [curr]: getMessageCreator<MessagePayload<typeof schema.schemas[string]>>(curr)
+    }), {} as any);
 }

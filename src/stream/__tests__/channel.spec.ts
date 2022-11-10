@@ -23,9 +23,9 @@ describe('Channel', () => {
         }
 
         // Act
-        const messageCreators = getMessageCreators(channelSchema);
-        const addEvent = messageCreators.Add({ amount: 5 });
-        const subtractEvent = messageCreators.Subtract({ amount: -2 });
+        const math = getMessageCreators(channelSchema);
+        const addEvent = math.Add({ amount: 5 });
+        const subtractEvent = math.Subtract({ amount: -2 });
 
         // Assert
         expect(addEvent._tag).toBe('Add');

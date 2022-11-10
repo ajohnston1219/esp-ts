@@ -31,7 +31,9 @@ export type AnyMessageSchema = MessageSchema<string, Zod.ZodTypeAny>;
 export type MessageTag<M extends AnyMessageSchema> = M['_tag'];
 export type MessagePayload<M extends AnyMessageSchema> = z.infer<M['schema']>
 export type MessageType<M extends AnyMessageSchema> = Message<MessageTag<M>, MessagePayload<M>>;
-export type MessageCreator<M extends AnyMessageSchema> = (payload: MessagePayload<M>) => MessageType<M>;
+export type MessageCreator<M extends AnyMessageSchema> = MessagePayload<M> extends undefined
+    ? () => MessageType<M>
+    : (payload: MessagePayload<M>) => MessageType<M>;
 function createMessage<Schema extends AnyMessageSchema>(
     tag: MessageTag<Schema>,
     payload: MessagePayload<Schema>,
@@ -45,7 +47,7 @@ function createMessage<Schema extends AnyMessageSchema>(
 export function getMessageCreator<Schema extends AnyMessageSchema>(
     tag: MessageTag<Schema>,
 ): MessageCreator<Schema> {
-    return function(payload: MessagePayload<Schema>) {
+    return function(payload?: MessagePayload<Schema>) {
         return createMessage<Schema>(tag, payload);
     }
 }
