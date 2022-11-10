@@ -5,6 +5,7 @@ describe('Channel', () => {
     it('Properly creates channel definition', () => {
         // Arrange
         const channelSchema = {
+            service: 'my-service',
             name: 'math',
             schemas: {
                 Add: {

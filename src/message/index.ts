@@ -2,7 +2,9 @@ import { StreamName } from '../stream';
 import * as uuid from 'uuid';
 import { z } from 'zod';
 
-export type Message<Tag extends string, Payload = any> = { readonly _tag: Tag } & Payload;
+export type Message<Tag extends string, Payload = any> = Payload extends undefined
+    ? { readonly _tag: Tag }
+    : { readonly _tag: Tag } & Payload;
 
 export type TraceId = string;
 export const generateTraceId = uuid.v4;
@@ -44,10 +46,19 @@ function createMessage<Schema extends AnyMessageSchema>(
     }
     return message;
 }
+export type MessageHookFunction<M extends AnyMessage> = (message: M) => void;
+export interface MessageHook<M extends AnyMessage> {
+    after?: MessageHookFunction<M>[],
+}
 export function getMessageCreator<Schema extends AnyMessageSchema>(
     tag: MessageTag<Schema>,
+    hooks?: MessageHook<MessageType<Schema>>,
 ): MessageCreator<Schema> {
     return function(payload?: MessagePayload<Schema>) {
-        return createMessage<Schema>(tag, payload);
+        const message = createMessage<Schema>(tag, payload);
+        if (hooks?.after) {
+            hooks.after.forEach(hook => hook(message));
+        }
+        return message;
     }
 }

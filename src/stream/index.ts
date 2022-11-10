@@ -1,4 +1,4 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessagePayload, MessageTag } from '../message';
+import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType } from '../message';
 import * as uuid from 'uuid';
 
 export type AggregateId = string;
@@ -33,13 +33,14 @@ export function messageInStream({ streamName }: Envelope<AnyMessage>, _streamNam
     return streamEquals(streamName, _streamName);
 }
 
-export interface ChannelSchema<N extends string, Schema extends AnyMessageSchema> {
+export interface ChannelSchema<N extends string, Schema extends AnyMessageSchema, S extends string = '__LOCAL__'> {
+    readonly service: S;
     readonly name: N;
     readonly schemas: {
         [Tag in MessageTag<Schema>]: Schema;
     }
 }
-export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema>;
+export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema, string>;
 export type ChannelName<Schema extends AnyChannelSchema> = Schema['name'];
 export type ChannelTags<Schema extends AnyChannelSchema> = keyof Schema['schemas'];
 export type ChannelSchemas<Schema extends AnyChannelSchema, T extends ChannelTags<Schema> = ChannelTags<Schema>> = Schema['schemas'][T];
@@ -48,9 +49,20 @@ export type ChannelMessageCreators<Schema extends AnyChannelSchema> = {
     [Tag in ChannelTags<Schema>]: MessageCreator<ChannelSchemas<Schema, Tag>>;
 }
 
-export function getMessageCreators<Schema extends AnyChannelSchema>(schema: Schema): ChannelMessageCreators<Schema> {
-    return Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
+export type MessageHooks<Schema extends AnyChannelSchema> = {
+    [Tag in ChannelTags<Schema>]: MessageHook<MessageType<ChannelSchemas<Schema, Tag>>>;
+}
+
+export function getMessageCreators<Schema extends AnyChannelSchema>(
+    schema: Schema,
+    hooks?: MessageHooks<Schema>,
+): ChannelMessageCreators<Schema> {
+    const getHooks = (schemaName: ChannelTags<Schema>) => {
+        return hooks ? hooks[schemaName] : undefined;
+    };
+    const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator<MessagePayload<typeof schema.schemas[string]>>(curr)
+        [curr]: getMessageCreator<MessagePayload<typeof schema.schemas[string]>>(schema.schemas[curr]._tag, getHooks(curr)),
     }), {} as any);
+    return creators;
 }

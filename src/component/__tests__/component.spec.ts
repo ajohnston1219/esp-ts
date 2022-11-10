@@ -1,49 +1,44 @@
 import { z } from 'zod';
-import { ComponentChannelMessageCreators, ComponentChannelNames, ComponentChannelSchema, ComponentChannelSchemas, ComponentMessageCreators, ComponentTags, createComponent } from '..';
-import { MessageCreator } from '../../message';
-import { ChannelMessageCreators, ChannelSchemas, ChannelTags } from '../../stream';
+import { createComponent } from '..';
 
 describe('Component', () => {
     it('Properly creates component definition', () => {
         // Arrange
-        const mathSchema = {
-            name: 'math' as const,
+        const pingSchema = {
+            service: 'my-service',
+            name: 'ping' as const,
             schemas: {
-                Add: {
-                    _tag: 'Add' as const,
-                    schema: z.object({
-                        amount: z.number().min(0).max(100),
-                    })
-                },
-                Subtract: {
-                    _tag: 'Subtract' as const,
-                    schema: z.object({
-                        amount: z.number().min(-100).max(0),
-                    }),
-                }
-            }
+                ping: { _tag: 'Ping' as const, schema: z.undefined() },
+            },
         }
-        const pingPongSchema = {
-            name: 'ping-pong' as const,
+        const pongSchema = {
+            service: 'my-service',
+            name: 'pong' as const,
             schemas: {
-                Ping: { _tag: 'Ping' as const, schema: z.undefined() },
-                Pong: { _tag: 'Pong' as const, schema: z.undefined() },
+                pong: { _tag: 'Pong' as const, schema: z.undefined() },
             },
         }
         const componentConfig = {
             name: 'my-component' as const,
-            channels: {
-                'math': mathSchema,
-                'ping-pong': pingPongSchema,
-            }
+            inputChannels: {
+                'ping': pingSchema,
+            },
+            outputChannels: {
+                'pong': pongSchema,
+            },
         }
         const component = createComponent(componentConfig);
 
         // Act
-        const add = component.messages.math.Add({ amount: 10 });
-        const subtract = component.messages.math.Subtract({ amount: -10 });
-        const ping = component.messages['ping-pong'].Pong();
+        component.messages.recv.ping.ping();
+        component.messages.send.pong.pong();
 
         // Assert
+        const inbox = component.getInbox();
+        expect(inbox.length).toBe(1);
+        expect(inbox[0]._tag).toBe('Ping');
+        const outbox = component.getOutbox();
+        expect(outbox.length).toBe(1);
+        expect(outbox[0]._tag).toBe('Pong');
     })
 })
