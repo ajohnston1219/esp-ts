@@ -1,6 +1,6 @@
 import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, TraceId } from '../message';
 import * as uuid from 'uuid';
-import { KeysOfUnion } from '../utils';
+import { KeysOfUnion } from '../utils/types';
 
 export type AggregateId = string;
 export const generateId = uuid.v4;

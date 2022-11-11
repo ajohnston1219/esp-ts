@@ -1,8 +1,7 @@
-import { z } from 'zod';
 import { ComponentMessageType, createComponent } from '..';
 import { generateMessageId, generateTraceId, IncomingMessage, Message, MessagePayload } from '../../message';
 import { generateId } from '../../stream';
-import { KeysOfUnion } from '../../utils';
+import { createPingPongComponentConfig } from '../../utils/tests';
 
 describe('Component', () => {
 
@@ -55,7 +54,6 @@ describe('Component', () => {
             }
         });
 
-        type Msg = ComponentMessageType<typeof component, 'In'>;
         const rawMessage: IncomingMessage<Message<'Ping', undefined>> = {
             id: generateMessageId(),
             version: 0,
@@ -89,31 +87,3 @@ describe('Component', () => {
         await component.stop();
     })
 })
-
-function createPingPongComponentConfig() {
-    const pingSchema = {
-        service: 'my-service',
-        name: 'ping' as const,
-        schemas: {
-            ping: { _tag: 'Ping' as const, schema: z.undefined() },
-        },
-    }
-    const pongSchema = {
-        service: 'my-service',
-        name: 'pong' as const,
-        schemas: {
-            pong: { _tag: 'Pong' as const, schema: z.undefined() },
-        },
-    }
-    const componentConfig = {
-        name: 'my-component' as const,
-        inputChannels: {
-            'ping': pingSchema,
-        },
-        outputChannels: {
-            'pong': pongSchema,
-        },
-    }
-
-    return componentConfig;
-}

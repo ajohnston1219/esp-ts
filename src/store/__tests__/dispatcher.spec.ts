@@ -2,8 +2,8 @@ import { InMemoryMessageStoreDB, MessageStore } from "..";
 import { generateTraceId, IncomingMessage, Message, OutgoingMessage } from "../../message";
 import { AggregateId, Channel, generateId, messageInChannel } from "../../stream";
 import { Dispatcher, HandlerFunction } from "../dispatcher";
-import { z } from 'zod';
-import { ComponentType, createComponent } from "../../component";
+import { createComponent } from "../../component";
+import { createPingPongComponentConfig, nextTick } from "../../utils/tests";
 
 const createChannel = (channel: string) => ({ channel, service: 'my-service' });
 
@@ -64,7 +64,7 @@ describe('Dispatcher', () => {
         const dispatcher = Dispatcher.create([channel], handler);
 
         // Act
-        messageStore.bind(dispatcher);
+        messageStore.bindDispatcher(dispatcher);
         await nextTick();
 
         // Assert
@@ -98,7 +98,7 @@ describe('Dispatcher', () => {
         const dispatcher = Dispatcher.restore([{ channel, offset: 5 }], handler);
 
         // Act
-        messageStore.bind(dispatcher);
+        messageStore.bindDispatcher(dispatcher);
         await nextTick();
 
         // Assert
@@ -138,7 +138,7 @@ describe('Dispatcher', () => {
         const dispatcher = Dispatcher.restore([{ channel, offset: 5 }, { channel: otherChannel, offset: 3 }], handler);
 
         // Act
-        messageStore.bind(dispatcher);
+        messageStore.bindDispatcher(dispatcher);
         await nextTick();
 
         // Assert
@@ -174,7 +174,7 @@ describe('Dispatcher', () => {
         });
 
         // Act
-        messageStore.bind(dispatcher);
+        messageStore.bindDispatcher(dispatcher);
         await nextTick();
 
         // Assert
@@ -197,38 +197,3 @@ describe('Dispatcher', () => {
         await component.stop();
     });
 });
-
-function delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-function nextTick(): Promise<void> {
-    return delay(0);
-}
-
-function createPingPongComponentConfig() {
-    const pingSchema = {
-        service: 'my-service',
-        name: 'ping' as const,
-        schemas: {
-            ping: { _tag: 'Ping' as const, schema: z.undefined() },
-        },
-    }
-    const pongSchema = {
-        service: 'my-service',
-        name: 'pong' as const,
-        schemas: {
-            pong: { _tag: 'Pong' as const, schema: z.undefined() },
-        },
-    }
-    const componentConfig = {
-        name: 'my-component' as const,
-        inputChannels: {
-            'ping': pingSchema,
-        },
-        outputChannels: {
-            'pong': pongSchema,
-        },
-    }
-
-    return componentConfig;
-}

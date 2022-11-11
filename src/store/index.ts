@@ -1,8 +1,9 @@
-import { AnyMessage, OutgoingMessage, StoredMessage } from '../message';
-import { AggregateId, channelEquals, generateId, streamEquals } from '../stream';
-import { concat, concatMap, distinct, filter, from, fromEvent, Observable, shareReplay, Subscription } from 'rxjs';
+import { AnyMessage, generateMessageId, OutgoingMessage, StoredMessage, TraceId } from '../message';
+import { AggregateId, channelEquals, streamEquals } from '../stream';
+import { concat, concatMap, distinct, filter, from, fromEvent, map, Observable, shareReplay, Subscription, tap } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
+import { AnyComponent, AnyComponentConfig, Component, ComponentMessageType, ComponentType } from '../component';
 
 interface LogResult {
     readonly id: AggregateId;
@@ -12,6 +13,7 @@ interface LogResult {
 
 interface MessageStoreDB {
     logMessage(message: OutgoingMessage<AnyMessage>): Promise<LogResult>;
+    getTrace(traceId: TraceId): Promise<StoredMessage<AnyMessage>[]>;
     getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>>;
 }
 
@@ -25,13 +27,17 @@ export class InMemoryMessageStoreDB implements MessageStoreDB {
     }
 
     public async logMessage(_message: OutgoingMessage<AnyMessage>): Promise<LogResult> {
-        const id = generateId();
+        const id = generateMessageId();
         const version = this.getAggregateVersion(_message) + 1;
         const channelVersion = this.getChannelVersion(_message) + 1;
         const depth = this.getDepth(_message);
         const message: StoredMessage<AnyMessage> = { id, version, channelVersion, depth, ..._message };
         this._log.push(message);
         return { id, version, depth };
+    }
+
+    public async getTrace(traceId: string): Promise<StoredMessage<AnyMessage>[]> {
+        return this._log.filter(m => m.traceId === traceId);
     }
 
     public getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>> {
@@ -76,7 +82,11 @@ export class MessageStore implements MessageStore {
         return result;
     }
 
-    public bind<M extends AnyMessage>(dispatcher: Dispatcher<M>): void {
+    public async getTrace(traceId: TraceId): Promise<StoredMessage<AnyMessage>[]> {
+        return this._db.getTrace(traceId);
+    }
+
+    public bindDispatcher<M extends AnyMessage>(dispatcher: Dispatcher<M>): void {
         const existingMessages = this._db.getDispatcherStream<M>(dispatcher);
         const message$ = concat(existingMessages, this._messageStream);
         const sub = message$.pipe(
@@ -85,6 +95,39 @@ export class MessageStore implements MessageStore {
             concatMap(msg => dispatcher.handle(msg as any)),
         ).subscribe();
         this._subscriptions.push(sub);
+    }
+
+    public bindOutputStream<M extends AnyMessage>(output: Observable<OutgoingMessage<M>>): void {
+        const sub = output.pipe(
+            concatMap(msg => this.logMessage(msg)),
+            // TODO(adam): Handle Log Failure (make sure to include Trace ID)
+        ).subscribe();
+        this._subscriptions.push(sub);
+    }
+
+    public bindComponent<C extends AnyComponentConfig, FR extends string>(component: Component<C, FR>): void {
+        const dispatcher = Dispatcher.fromComponent<C, FR>(component);
+        this.bindDispatcher(dispatcher);
+        this.bindOutputStream(component.outbox.pipe(
+            map(msg => {
+                const payload = (msg as any).payload;
+                const message: OutgoingMessage<ComponentMessageType<AnyComponent, 'Out'>> = {
+                    traceId: msg.traceId,
+                    streamName: {
+                        service: msg.service,
+                        channel: msg.channel,
+                        id: msg.aggregateId,
+                    },
+                    message: payload ? {
+                        _tag: msg._tag,
+                        payload,
+                    } : {
+                        _tag: msg._tag,
+                    } as any,
+                }
+                return message;
+            }),
+        ));
     }
 
     public async stopDispatchers(): Promise<void> {
