@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getMessageCreators } from '..';
+import { generateId, getMessageCreators } from '..';
 
 describe('Channel', () => {
     it('Properly creates channel definition', () => {
@@ -24,14 +24,18 @@ describe('Channel', () => {
         }
 
         // Act
+        const addId = generateId();
+        const subtractId = generateId();
         const math = getMessageCreators(channelSchema);
-        const addEvent = math.Add({ amount: 5 });
-        const subtractEvent = math.Subtract({ amount: -2 });
+        const addEvent = math.Add(addId)({ amount: 5 });
+        const subtractEvent = math.Subtract(subtractId)({ amount: -2 });
 
         // Assert
+        expect(addEvent.aggregateId).toBe(addId);
         expect(addEvent._tag).toBe('Add');
-        expect(addEvent.amount).toBe(5);
+        expect(addEvent.payload.amount).toBe(5);
+        expect(subtractEvent.aggregateId).toBe(subtractId);
         expect(subtractEvent._tag).toBe('Subtract');
-        expect(subtractEvent.amount).toBe(-2);
+        expect(subtractEvent.payload.amount).toBe(-2);
     })
 })

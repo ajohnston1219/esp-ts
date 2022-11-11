@@ -5,19 +5,15 @@ import { Dispatcher, HandlerFunction } from "../dispatcher";
 
 const createChannel = (channel: string) => ({ channel, service: 'my-service' });
 
-interface AddEvent extends Message<'Add'> {
-    readonly amount: number;
-}
-const addEvent = (amount: number): AddEvent => ({
+type AddEvent = Message<'Add', number>;
+const addEvent = (payload: number): AddEvent => ({
     _tag: 'Add',
-    amount,
+    payload,
 });
-interface SubtractEvent extends Message<'Subtract'> {
-    readonly amount: number;
-}
-const subtractEvent = (amount: number): SubtractEvent => ({
+type SubtractEvent = Message<'Subtract', number>;
+const subtractEvent = (payload: number): SubtractEvent => ({
     _tag: 'Subtract',
-    amount,
+    payload,
 });
 type MathEvent = AddEvent | SubtractEvent;
 
@@ -107,7 +103,7 @@ describe('Dispatcher', () => {
         expect(consumed.length).toBe(5);
         consumed.forEach((msg, i) => {
             expect(msg.streamName.channel).toBe(channel.channel);
-            expect(msg.message.amount).toBe(i + 5);
+            expect(msg.message.payload).toBe(i + 5);
         })
     });
 
@@ -148,11 +144,11 @@ describe('Dispatcher', () => {
         expect(otherConsumed.length).toBe(7);
         consumed.forEach((msg, i) => {
             expect(msg.streamName.channel).toBe(channel.channel);
-            expect(msg.message.amount).toBe(i + 5);
+            expect(msg.message.payload).toBe(i + 5);
         })
         otherConsumed.forEach((msg, i) => {
             expect(msg.streamName.channel).toBe(otherChannel.channel);
-            expect(msg.message.amount).toBe(i + 3);
+            expect(msg.message.payload).toBe(i + 3);
         })
     });
 });

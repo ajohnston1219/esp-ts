@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createComponent } from '..';
+import { generateId } from '../../stream';
 
 describe('Component', () => {
     it('Properly creates component definition', () => {
@@ -28,17 +29,20 @@ describe('Component', () => {
             },
         }
         const component = createComponent(componentConfig);
+        const id = generateId();
 
         // Act
-        component.messages.recv.ping.ping();
-        component.messages.send.pong.pong();
+        component.messages.recv.ping(id).ping();
+        component.messages.send.pong(id).pong();
 
         // Assert
         const inbox = component.getInbox();
         expect(inbox.length).toBe(1);
+        expect(inbox[0].aggregateId).toBe(id);
         expect(inbox[0]._tag).toBe('Ping');
         const outbox = component.getOutbox();
         expect(outbox.length).toBe(1);
+        expect(outbox[0].aggregateId).toBe(id);
         expect(outbox[0]._tag).toBe('Pong');
     })
 })

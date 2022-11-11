@@ -1,5 +1,5 @@
-import { MessageCreator, MessageHookFunction, MessageType } from "../message";
-import { AnyChannelSchema, ChannelMessageCreators, ChannelPayloads, ChannelSchemas, ChannelTags, getMessageCreators, MessageHooks } from "../stream";
+import { MessageCreator, MessageCreatorNoId, MessageHookFunction, MessageResult, MessageType } from "../message";
+import { AggregateId, AnyChannelSchema, ChannelMessageCreators, ChannelPayloads, ChannelSchemas, ChannelTags, getMessageCreators, getMessageCreatorsNoId, MessageHooks } from "../stream";
 
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 
@@ -14,20 +14,20 @@ export interface ComponentConfig<Name extends string, Schema extends AnyChannelS
 }
 export type AnyComponentConfig = ComponentConfig<string, AnyChannelSchema>;
 export type ComponentMessageCreators<C extends AnyComponentConfig, N extends ComponentChannelNames<C, CT>, CT extends ChannelType> = {
-    [Tag in ComponentTags<ComponentChannelSchemas<C, CT>>]: MessageCreator<ChannelSchemas<ComponentChannelSchema<C, N, CT>, Tag>>;
+    [Tag in ComponentTags<ComponentChannelSchemas<C, CT>>]: MessageCreatorNoId<ChannelSchemas<ComponentChannelSchema<C, N, CT>, Tag>>;
 }
 export type Component<Name extends string, Config extends AnyComponentConfig> = {
     readonly name: Name;
     readonly messages: {
         recv: {
-            [N in ComponentChannelNames<Config, 'In'>]: ComponentMessageCreators<Config, N, 'In'>;
+            [N in ComponentChannelNames<Config, 'In'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'In'>;
         },
         send: {
-            [N in ComponentChannelNames<Config, 'Out'>]: ComponentMessageCreators<Config, N, 'Out'>;
+            [N in ComponentChannelNames<Config, 'Out'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'Out'>;
         },
     }
-    readonly getInbox: () => InMessage<Config>[],
-    readonly getOutbox: () => OutMessage<Config>[],
+    readonly getInbox: () => MessageResult<InMessage<Config>>[],
+    readonly getOutbox: () => MessageResult<OutMessage<Config>>[],
 }
 type ChannelType = 'In' | 'Out';
 type ComponentChannelNames<C extends AnyComponentConfig, CT extends ChannelType> =
@@ -43,11 +43,11 @@ type OutMessage<C extends AnyComponentConfig> = MessageType<ChannelSchemas<Compo
 
 export function createComponent<C extends AnyComponentConfig>(config: C): ComponentType<C> {
 
-    const inbox: InMessage<C>[] = [];
-    const outbox: OutMessage<C>[] = [];
+    const inbox: MessageResult<InMessage<C>>[] = [];
+    const outbox: MessageResult<OutMessage<C>>[] = [];
 
     const recvHooks = Object.keys(config.inputChannels).reduce((acc, curr) => {
-        const hook = (msg: InMessage<C>) => inbox.push(msg);
+        const hook = (msg: MessageResult<InMessage<C>>) => inbox.push(msg);
         const schemas = config.inputChannels[curr].schemas;
         const hooks = Object.keys(schemas).reduce((acc, _curr) => {
             return { ...acc, [_curr]: { after: [ hook ] } };
@@ -59,7 +59,7 @@ export function createComponent<C extends AnyComponentConfig>(config: C): Compon
         return result;
     }, {} as any);
     const sendHooks = Object.keys(config.outputChannels).reduce((acc, curr) => {
-        const hook = (msg: OutMessage<C>) => outbox.push(msg);
+        const hook = (msg: MessageResult<OutMessage<C>>) => outbox.push(msg);
         const schemas = config.outputChannels[curr].schemas;
         const hooks = Object.keys(schemas).reduce((acc, _curr) => {
             return { ...acc, [_curr]: { after: [ hook ] } };
@@ -75,7 +75,8 @@ export function createComponent<C extends AnyComponentConfig>(config: C): Compon
         const hooks: any = recvHooks[curr];
         return {
             ...acc,
-            [curr]: getMessageCreators<ComponentChannelSchemas<C, 'In'>>(
+            [curr]: (id: AggregateId) => getMessageCreatorsNoId<ComponentChannelSchemas<C, 'In'>>(
+                id,
                 config.inputChannels[curr] as ComponentChannelSchemas<C, 'In'>,
                 hooks,
             ),
@@ -85,7 +86,8 @@ export function createComponent<C extends AnyComponentConfig>(config: C): Compon
         const hooks: any = sendHooks[curr];
         return {
             ...acc,
-            [curr]: getMessageCreators<ComponentChannelSchemas<C, 'Out'>>(
+            [curr]: (id: AggregateId) => getMessageCreatorsNoId<ComponentChannelSchemas<C, 'Out'>>(
+                id,
                 config.outputChannels[curr] as ComponentChannelSchemas<C, 'Out'>,
                 hooks,
             ),
