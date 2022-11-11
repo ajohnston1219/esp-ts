@@ -12,13 +12,15 @@ describe('Message', () => {
             })
         }
         const id = generateId();
-        const addEvent = getMessageCreator<typeof messageSchema>('Add')(id);
+        const traceId = generateId();
+        const addEvent = getMessageCreator<typeof messageSchema>('Add')(traceId)(id);
         const amount = 4;
 
         // Act
         const event = addEvent({ amount });
 
         // Assert
+        expect(event.traceId).toBe(traceId);
         expect(event.aggregateId).toBe(id);
         expect(event._tag).toBe('Add');
         expect(event.payload.amount).toBe(amount);

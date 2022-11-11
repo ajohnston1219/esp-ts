@@ -1,4 +1,4 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType } from '../message';
+import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, TraceId } from '../message';
 import * as uuid from 'uuid';
 
 export type AggregateId = string;
@@ -62,11 +62,12 @@ export function getMessageCreators<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator<MessagePayload<typeof schema.schemas[string]>>(schema.schemas[curr]._tag, getHooks(curr) as any),
+        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr)),
     }), {} as any);
     return creators;
 }
 export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
+    traceId: TraceId,
     id: AggregateId,
     schema: Schema,
     hooks?: MessageHooks<Schema>,
@@ -76,7 +77,7 @@ export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator<MessagePayload<typeof schema.schemas[string]>>(schema.schemas[curr]._tag, getHooks(curr) as any)(id),
+        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr))(traceId)(id),
     }), {} as any);
     return creators;
 }
