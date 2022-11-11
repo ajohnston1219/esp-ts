@@ -79,6 +79,8 @@ describe('Component', () => {
             next: (msg) => {
                 expect(msg.traceId).toBe(traceId);
                 expect(msg.aggregateId).toBe(id);
+                expect(msg.service).toBe('my-service');
+                expect(msg.channel).toBe('pong');
                 expect(msg._tag).toBe('Pong');
             }
         });
