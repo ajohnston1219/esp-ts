@@ -1,3 +1,4 @@
+import { AnyComponent, AnyComponentConfig, ComponentMessageType, ComponentType } from "../component";
 import { AnyMessage, IncomingMessage, StoredMessage } from "../message";
 import { Channel, channelEquals } from "../stream";
 
@@ -19,6 +20,21 @@ export class Dispatcher<M extends AnyMessage> {
         handler: HandlerFunction<M>,
     ): Dispatcher<M> {
         return new Dispatcher(channels.map(channel => ({ channel, offset: 0 })), handler);
+    }
+
+    public static fromComponent<C extends AnyComponentConfig, FR extends string>(component: ComponentType<C, FR>): Dispatcher<ComponentMessageType<C, 'In'>> {
+        const handler: HandlerFunction<ComponentMessageType<C, 'In'>> = async (message) => {
+            component.recvRaw(message);
+        }
+        const subscriptions: DispatcherSubscription[] = Object.keys(component.inputChannels).map(key => {
+            const schema = (component.inputChannels as any)[key];
+            const channel = { channel: schema.name, service: schema.service };
+            return {
+                channel,
+                offset: 0,
+            };
+        });
+        return new Dispatcher(subscriptions, handler);
     }
 
     public static restore<M extends AnyMessage>(

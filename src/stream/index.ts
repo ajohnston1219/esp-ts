@@ -1,5 +1,6 @@
 import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, TraceId } from '../message';
 import * as uuid from 'uuid';
+import { KeysOfUnion } from '../utils';
 
 export type AggregateId = string;
 export const generateId = uuid.v4;
@@ -42,7 +43,7 @@ export interface ChannelSchema<N extends string, Schema extends AnyMessageSchema
 }
 export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema, string>;
 export type ChannelName<Schema extends AnyChannelSchema> = Schema['name'];
-export type ChannelTags<Schema extends AnyChannelSchema> = keyof Schema['schemas'];
+export type ChannelTags<Schema extends AnyChannelSchema> = KeysOfUnion<Schema['schemas']>;
 export type ChannelSchemas<Schema extends AnyChannelSchema, T extends ChannelTags<Schema> = ChannelTags<Schema>> = Schema['schemas'][T];
 export type ChannelPayloads<Schema extends AnyChannelSchema> = MessagePayload<Schema['schemas'][string]>;
 export type ChannelMessageCreators<Schema extends AnyChannelSchema> = {
@@ -62,7 +63,7 @@ export function getMessageCreators<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr)),
+        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr as any)),
     }), {} as any);
     return creators;
 }
@@ -77,7 +78,7 @@ export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr))(traceId)(id),
+        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr as any))(traceId)(id),
     }), {} as any);
     return creators;
 }

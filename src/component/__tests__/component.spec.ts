@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { createComponent } from '..';
-import { generateMessageId, generateTraceId, IncomingMessage, Message } from '../../message';
+import { ComponentMessageType, createComponent } from '..';
+import { generateMessageId, generateTraceId, IncomingMessage, Message, MessagePayload } from '../../message';
 import { generateId } from '../../stream';
+import { KeysOfUnion } from '../../utils';
 
 describe('Component', () => {
 
@@ -53,6 +54,8 @@ describe('Component', () => {
                     return c.success();
             }
         });
+
+        type Msg = ComponentMessageType<typeof component, 'In'>;
         const rawMessage: IncomingMessage<Message<'Ping', undefined>> = {
             id: generateMessageId(),
             version: 0,

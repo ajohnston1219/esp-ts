@@ -2,6 +2,8 @@ import { InMemoryMessageStoreDB, MessageStore } from "..";
 import { generateTraceId, IncomingMessage, Message, OutgoingMessage } from "../../message";
 import { AggregateId, Channel, generateId, messageInChannel } from "../../stream";
 import { Dispatcher, HandlerFunction } from "../dispatcher";
+import { z } from 'zod';
+import { ComponentType, createComponent } from "../../component";
 
 const createChannel = (channel: string) => ({ channel, service: 'my-service' });
 
@@ -151,6 +153,49 @@ describe('Dispatcher', () => {
             expect(msg.message.payload).toBe(i + 3);
         })
     });
+
+    it('properly creates dispatcher from a component', async () => {
+        // Arrange
+        const id = generateId();
+        const traceId = generateTraceId();
+        const config = createPingPongComponentConfig();
+        const component = createComponent(config, (c) => async (msg) => {
+            switch (msg._tag) {
+                case 'Ping':
+                    c.send.pong(id).pong();
+                    return c.success();
+            }
+        });
+        const dispatcher = Dispatcher.fromComponent(component);
+        await messageStore.logMessage({
+            traceId,
+            streamName: { service: 'my-service', channel: 'ping', id },
+            message: { _tag: 'Ping' },
+        });
+
+        // Act
+        messageStore.bind(dispatcher);
+        await nextTick();
+
+        // Assert
+        const inSub = component.inbox.subscribe({
+            next: (msg) => {
+                expect(msg.traceId).toBe(traceId);
+                expect(msg.aggregateId).toBe(id);
+                expect(msg._tag).toBe('Ping');
+            }
+        });
+        const outSub = component.outbox.subscribe({
+            next: (msg) => {
+                expect(msg.traceId).toBe(traceId);
+                expect(msg.aggregateId).toBe(id);
+                expect(msg._tag).toBe('Pong');
+            }
+        });
+        inSub.unsubscribe();
+        outSub.unsubscribe();
+        await component.stop();
+    });
 });
 
 function delay(ms: number): Promise<void> {
@@ -158,4 +203,32 @@ function delay(ms: number): Promise<void> {
 }
 function nextTick(): Promise<void> {
     return delay(0);
+}
+
+function createPingPongComponentConfig() {
+    const pingSchema = {
+        service: 'my-service',
+        name: 'ping' as const,
+        schemas: {
+            ping: { _tag: 'Ping' as const, schema: z.undefined() },
+        },
+    }
+    const pongSchema = {
+        service: 'my-service',
+        name: 'pong' as const,
+        schemas: {
+            pong: { _tag: 'Pong' as const, schema: z.undefined() },
+        },
+    }
+    const componentConfig = {
+        name: 'my-component' as const,
+        inputChannels: {
+            'ping': pingSchema,
+        },
+        outputChannels: {
+            'pong': pongSchema,
+        },
+    }
+
+    return componentConfig;
 }
