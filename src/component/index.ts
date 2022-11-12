@@ -1,12 +1,11 @@
-import { concatMap, fromEvent, lastValueFrom, Observable, shareReplay, takeUntil, tap } from "rxjs";
-import { AnyMessage, IncomingMessage, Message, MessageCreatorNoId, MessageResult, MessageType, TraceId } from "../message";
-import { AggregateId, AnyChannelSchema, ChannelSchemas, getMessageCreatorsNoId, MessageHooks, messageInChannel } from "../stream";
+import { fromEvent, lastValueFrom, Observable, shareReplay, takeUntil } from "rxjs";
+import { AnyMessage, IncomingMessage, MessageCreatorNoId, MessageResult, MessageType, TraceId } from "../message";
+import { AggregateId, AnyChannelSchema, ChannelSchemas, getMessageCreatorsNoId, MessageHooks } from "../stream";
 import { EventEmitter } from 'node:events';
 import { KeysOfUnion } from "../utils/types";
 
-export interface ComponentConfig<Name extends string, InputSchema extends AnyChannelSchema, OutputSchema extends AnyChannelSchema, FailureReason extends string> {
+export interface ComponentConfig<Name extends string, InputSchema extends AnyChannelSchema, OutputSchema extends AnyChannelSchema> {
     readonly name: Name;
-    readonly failureReasons: FailureReason[];
     readonly inputChannels: {
         [N in InputSchema['name']]: InputSchema;
     }
@@ -179,7 +178,7 @@ export type ComponentHandlerFunction<Config extends AnyComponentConfig, FailureR
 export type ComponentMessageCreators<C extends AnyComponentConfig, N extends ComponentChannelNames<C, CT>, CT extends ChannelType> = {
     [Tag in ComponentTags<ComponentChannelSchemas<C, CT>>]: MessageCreatorNoId<ChannelSchemas<ComponentChannelSchema<C, N, CT>, Tag>>;
 }
-export type AnyComponentConfig = ComponentConfig<string, AnyChannelSchema, AnyChannelSchema, string>;
+export type AnyComponentConfig = ComponentConfig<string, AnyChannelSchema, AnyChannelSchema>;
 export type AnyComponent = Component<AnyComponentConfig, string>;
 
 type ChannelType = 'In' | 'Out';
@@ -197,8 +196,8 @@ export type ComponentTags<C extends AnyChannelSchema> = KeysOfUnion<C['schemas']
 export type ComponentMessageTags<C extends AnyChannelSchema> = C['schemas'][ComponentTags<C>]['_tag'];
 export type ComponentType<C extends AnyComponentConfig, FR extends string> = Component<C, FR>;
 
-type ComponentMessageSchemas<C extends AnyComponentConfig, CT extends ChannelType> =
-    ComponentChannelSchemas<C, CT>['schemas'][ComponentChannelNames<C, CT>];
+export type ComponentMessageSchemas<C extends AnyComponentConfig, CT extends ChannelType> =
+    ComponentChannelSchemas<C, CT>['schemas'][ComponentTags<ComponentChannelSchemas<C, CT>>];
 export type ComponentMessageType<C extends AnyComponentConfig, CT extends ChannelType> =
     MessageType<ComponentMessageSchemas<C, CT>>;
 type InMessage<C extends AnyComponentConfig> = ComponentMessageType<C, 'In'>;

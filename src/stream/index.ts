@@ -1,6 +1,7 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, TraceId } from '../message';
+import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, TraceId } from '../message';
 import * as uuid from 'uuid';
 import { KeysOfUnion } from '../utils/types';
+import { Schema } from 'zod';
 
 export type AggregateId = string;
 export const generateId = uuid.v4;
@@ -45,7 +46,9 @@ export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema, string>;
 export type ChannelName<Schema extends AnyChannelSchema> = Schema['name'];
 export type ChannelTags<Schema extends AnyChannelSchema> = KeysOfUnion<Schema['schemas']>;
 export type ChannelSchemas<Schema extends AnyChannelSchema, T extends ChannelTags<Schema> = ChannelTags<Schema>> = Schema['schemas'][T];
-export type ChannelPayloads<Schema extends AnyChannelSchema> = MessagePayload<Schema['schemas'][string]>;
+export type ChannelPayloads<Schema extends AnyChannelSchema> = MessagePayload<Schema['schemas'][ChannelTags<Schema>]>;
+export type ChannelPayload<Schema extends AnyChannelSchema, T extends ChannelTags<Schema>> = MessagePayload<Schema['schemas'][T]>;
+export type ChannelMessage<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> = Message<Tag, ChannelPayload<Schema, Tag>>;
 export type ChannelMessageCreators<Schema extends AnyChannelSchema> = {
     [Tag in ChannelTags<Schema>]: MessageCreator<ChannelSchemas<Schema, Tag>>;
 }

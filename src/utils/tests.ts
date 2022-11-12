@@ -5,14 +5,14 @@ export const nextTick = () => delay(0);
 
 export function createPingPongComponentConfig() {
     const pingSchema = {
-        service: 'my-service',
+        service: 'my-service' as const,
         name: 'ping' as const,
         schemas: {
             ping: { _tag: 'Ping' as const, schema: z.undefined() },
         },
     }
     const pongSchema = {
-        service: 'my-service',
+        service: 'my-service' as const,
         name: 'pong' as const,
         schemas: {
             pong: { _tag: 'Pong' as const, schema: z.undefined() },
@@ -20,7 +20,6 @@ export function createPingPongComponentConfig() {
     }
     const componentConfig = {
         name: 'my-component' as const,
-        failureReasons: [ 'Unknown' as const ],
         inputChannels: {
             'ping': pingSchema,
         },
