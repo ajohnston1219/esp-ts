@@ -1,4 +1,5 @@
-import { ComponentMessageType, createComponent } from '..';
+import { lastValueFrom } from 'rxjs';
+import { ComponentChannelNames, ComponentMessageType, createComponent } from '..';
 import { generateMessageId, generateTraceId, IncomingMessage, Message, MessagePayload } from '../../message';
 import { generateId } from '../../stream';
 import { createPingPongComponentConfig } from '../../utils/tests';
@@ -85,5 +86,45 @@ describe('Component', () => {
         inSub.unsubscribe();
         outSub.unsubscribe();
         await component.stop();
+    })
+
+    it('Properly handles creating messages without sending/receiving', async () => {
+        // Arrange
+        const id = generateId();
+        const traceId = generateTraceId();
+        const config = createPingPongComponentConfig();
+        const component = createComponent(config, (c) => async (msg) => {
+            switch (msg._tag) {
+                case 'Ping':
+                    c.send.pong(id).pong();
+                    return c.success();
+            }
+        });
+
+        // Act
+        const ping = component.messages.create.recv(traceId).ping(id).ping();
+        const pong = component.messages.create.send(traceId).pong(id).pong();
+
+        // Assert
+        const inSub = component.inbox.subscribe({
+            next: () => expect(false).toBe(true), // Should not get any messages
+        });
+        const outSub = component.outbox.subscribe({
+            next: () => expect(false).toBe(true), // Should not send any messages
+        });
+        inSub.unsubscribe();
+        outSub.unsubscribe();
+        await component.stop();
+        const inResult = await lastValueFrom(component.inbox, { defaultValue: null });
+        const outResult = await lastValueFrom(component.outbox, { defaultValue: null });
+
+        expect(inResult).toBeNull();
+        expect(outResult).toBeNull();
+        expect(ping._tag).toBe('Ping');
+        expect(ping.aggregateId).toBe(id);
+        expect(ping.traceId).toBe(traceId);
+        expect(pong._tag).toBe('Pong');
+        expect(pong.aggregateId).toBe(id);
+        expect(pong.traceId).toBe(traceId);
     })
 })

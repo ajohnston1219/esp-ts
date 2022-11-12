@@ -1,4 +1,4 @@
-import { concatMap } from 'rxjs';
+import { concatMap, lastValueFrom, mergeScan, Observable, scan } from 'rxjs';
 import { z } from 'zod';
 import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, createComponent } from '../component';
 import { MessageResult } from '../message';
@@ -35,6 +35,7 @@ export type AnyAggregateSchema = AggregateSchema<Zod.ZodTypeAny, AnyChannelSchem
 
 export interface AggregateConfig<Name extends string, A extends AnyAggregateSchema> {
     readonly name: Name;
+    readonly initialState: z.infer<A['state']>;
     readonly schema: A;
 }
 export type AnyAggregateConfig = AggregateConfig<string, AnyAggregateSchema>;
@@ -54,10 +55,13 @@ export type AggregateComponent<A extends AnyAggregateConfig> =
         EventSchemas<A['schema'], ChannelKeys<A['schema'], 'events'>>
     >;
 
+export type HydrateFunction<A extends AnyAggregateConfig, FR extends string> =
+    (id: AggregateId, event$: Observable<ComponentMessageType<AggregateComponent<A>, 'Out'>>) => Promise<ProjectionResult<A, FR>>;
 export interface Aggregate<Config extends AnyAggregateConfig, FailureReason extends string> {
     readonly config: Config;
     readonly component: Component<AggregateComponent<Config>, FailureReason>;
     readonly get: ReturnType<GetAggregateFunction<Config, FailureReason>>;
+    readonly hydrate: HydrateFunction<Config, FailureReason>;
 }
 export type AnyAggregate = Aggregate<AnyAggregateConfig, string>;
 
@@ -100,11 +104,34 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
         const updateResult = await update(api)(event.aggregateId, result.state);
         return { ...updateResult, traceId: event.traceId };
     }
+
+    const hydrate: HydrateFunction<Config, FailureReason> = async (id, event$) => {
+        const obs = event$.pipe(
+            scan((lastResult, event) => {
+                if (lastResult._tag === 'Failure') {
+                    return lastResult;
+                }
+                const result = project(api)(lastResult.state, event);
+                return result;
+            }, { _tag: 'Success', state: config.initialState } as ProjectionResult<Config, FailureReason>),
+        );
+        const result = await lastValueFrom(obs, { defaultValue: null });
+        if (result === null) {
+            return api.success(config.initialState);
+        }
+        if (result._tag === 'Failure') {
+            return result;
+        }
+        const updateResult = await update(api)(id, result.state);
+        return updateResult;
+    }
+
     component.outbox.pipe(concatMap(msg => doProject(msg))).subscribe();
 
     return {
         config,
         component,
         get: get(api),
+        hydrate,
     };
 }

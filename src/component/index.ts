@@ -22,6 +22,14 @@ export type ComponentBuildResult<Config extends AnyComponentConfig, FailureReaso
         send: (traceId: TraceId) => {
             [N in ComponentChannelNames<Config, 'Out'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'Out'>;
         },
+        create: {
+            recv: (traceId: TraceId) => {
+                [N in ComponentChannelNames<Config, 'In'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'In'>;
+            },
+            send: (traceId: TraceId) => {
+                [N in ComponentChannelNames<Config, 'Out'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'Out'>;
+            },
+        },
     };
     readonly recvRaw: (message: IncomingMessage<AnyMessage>) => void;
     readonly handler: ComponentHandlerFunction<Config, FailureReason>;
@@ -45,6 +53,10 @@ export function createComponent<C extends AnyComponentConfig, FR extends string>
 
     const recv = createComponentChannels<C, 'In', FR>(config, emitter, 'In');
     const send = createComponentChannels<C, 'Out', FR>(config, emitter, 'Out');
+    const create = {
+        recv: createComponentChannels<C, 'In', FR>(config, emitter, 'In', true),
+        send: createComponentChannels<C, 'Out', FR>(config, emitter, 'Out', true),
+    };
 
     const inbox = fromEvent(emitter, 'in').pipe(
         takeUntil(stopper) as any,
@@ -80,7 +92,7 @@ export function createComponent<C extends AnyComponentConfig, FR extends string>
 
     const component: Component<C, FR> = {
         ...config,
-        messages: { recv, send },
+        messages: { recv, send, create },
         recvRaw,
         handler,
         inbox,
@@ -134,15 +146,16 @@ function createComponentChannels<Config extends AnyComponentConfig, CT extends C
     config: Config,
     emitter: EventEmitter,
     channelType: CT,
+    noHooks?: boolean,
 ): ComponentSendOrRecv<Config, CT, FR> {
     const channels = channelType === 'In' ? config.inputChannels : config.outputChannels;
-    const hooks = createHooks<Config, CT>(config, emitter, channelType);
+    const hooks = noHooks ? undefined : createHooks<Config, CT>(config, emitter, channelType);
     const componentChannels = Object.keys(channels).reduce((acc, curr) => {
         const channel = channels[curr] as ComponentChannelSchemas<Config, CT>;
         return {
             ...acc,
             [curr]: (traceId: TraceId) => (id: AggregateId) =>
-                getMessageCreatorsNoId<ComponentChannelSchemas<Config, CT>>(traceId, id, channel, (hooks as any)[curr]),
+                getMessageCreatorsNoId<ComponentChannelSchemas<Config, CT>>(traceId, id, channel, hooks && (hooks as any)[curr]),
         }
     }, {} as any);
     return (traceId: TraceId) => Object.keys(componentChannels).reduce((acc, key) => {
