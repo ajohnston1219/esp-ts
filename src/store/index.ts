@@ -1,9 +1,10 @@
-import { AnyMessage, generateMessageId, OutgoingMessage, StoredMessage, TraceId } from '../message';
+import { AnyMessage, generateMessageId, Message, MessagePayload, MessageTag, OutgoingMessage, StoredMessage, TraceId } from '../message';
 import { AggregateId, channelEquals, streamEquals } from '../stream';
 import { concat, concatMap, distinct, filter, from, fromEvent, map, Observable, shareReplay, Subscription, tap } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
-import { AnyComponent, AnyComponentConfig, Component, ComponentMessageType, ComponentType } from '../component';
+import { AnyComponent, AnyComponentConfig, Component, ComponentMessageType } from '../component';
+import { AggregateComponent, AggregateMessageType, AnyAggregate, AnyAggregateConfig } from '../aggregate';
 
 interface LogResult {
     readonly id: AggregateId;
@@ -14,6 +15,8 @@ interface LogResult {
 interface MessageStoreDB {
     logMessage(message: OutgoingMessage<AnyMessage>): Promise<LogResult>;
     getTrace(traceId: TraceId): Promise<StoredMessage<AnyMessage>[]>;
+    getAggregateStream: <A extends AnyAggregateConfig>(config: A) => (id: AggregateId) =>
+        Observable<StoredMessage<AggregateMessageType<A, 'events'>>>;
     getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>>;
 }
 
@@ -38,6 +41,28 @@ export class InMemoryMessageStoreDB implements MessageStoreDB {
 
     public async getTrace(traceId: string): Promise<StoredMessage<AnyMessage>[]> {
         return this._log.filter(m => m.traceId === traceId);
+    }
+
+    public getAggregateStream<A extends AnyAggregateConfig>(config: A): (id: AggregateId) => Observable<StoredMessage<AggregateMessageType<A, 'events'>>> {
+        type Msg = StoredMessage<AggregateMessageType<A, 'events'>>;
+        const fn = (id: AggregateId) => {
+            const match = (msg: Msg) => {
+                return (
+                    Object.keys(config.schema.events).some(key => {
+                        const event = config.schema.events[key];
+                        return (
+                            event.service === msg.streamName.service
+                            && event.name === msg.streamName.channel
+                            && id === msg.streamName.id
+                        );
+                    })
+                );
+            };
+            return from(this._log as Msg[]).pipe(
+                filter(msg => match(msg)),
+            );
+        }
+        return fn;
     }
 
     public getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>> {
@@ -128,6 +153,10 @@ export class MessageStore implements MessageStore {
                 return message;
             }),
         ));
+    }
+
+    public bindAggregate<A extends AnyAggregate, FR extends string>(aggregate: A): void {
+        this.bindComponent<AggregateComponent<A['config']>, FR>(aggregate.component);
     }
 
     public async stopDispatchers(): Promise<void> {

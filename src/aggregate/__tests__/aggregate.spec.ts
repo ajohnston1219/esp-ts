@@ -1,5 +1,5 @@
 import { of } from 'rxjs';
-import { AggregateHandlerFunction, AggregateProjectionFunction, createAggregate, GetAggregateFunction, ProjectionSuccess, UpdateAggregateFunction } from '../';
+import { ProjectionSuccess } from '../';
 import { generateTraceId } from '../../message';
 import { generateId } from '../../stream';
 import { createMathAggregate, nextTick } from '../../utils/tests';

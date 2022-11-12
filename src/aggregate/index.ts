@@ -47,6 +47,8 @@ export type CommandSchema<A extends AnyAggregateSchema, N extends ChannelKeys<A,
 export type EventSchema<A extends AnyAggregateSchema, N extends ChannelKeys<A, 'events'>> = ChannelSchema<A, 'events', N>;
 export type CommandSchemas<Config extends AnyAggregateSchema, N extends KeysOfUnion<Config['commands']>> = Config['commands'][N];
 export type EventSchemas<Config extends AnyAggregateSchema, N extends KeysOfUnion<Config['events']>> = Config['events'][N];
+export type AggregateMessageType<A extends AnyAggregateConfig, CT extends ChannelType> =
+    ComponentMessageType<AggregateComponent<A>, CT extends 'commands' ? 'In' : 'Out'>;
 
 export type AggregateComponent<A extends AnyAggregateConfig> =
     ComponentConfig<
@@ -56,7 +58,7 @@ export type AggregateComponent<A extends AnyAggregateConfig> =
     >;
 
 export type HydrateFunction<A extends AnyAggregateConfig, FR extends string> =
-    (id: AggregateId, event$: Observable<ComponentMessageType<AggregateComponent<A>, 'Out'>>) => Promise<ProjectionResult<A, FR>>;
+    (id: AggregateId, event$: Observable<AggregateMessageType<A, 'events'>>) => Promise<ProjectionResult<A, FR>>;
 export interface Aggregate<Config extends AnyAggregateConfig, FailureReason extends string> {
     readonly config: Config;
     readonly component: Component<AggregateComponent<Config>, FailureReason>;

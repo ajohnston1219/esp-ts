@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AggregateHandlerFunction, AggregateProjectionFunction, createAggregate, GetAggregateFunction, UpdateAggregateFunction } from '../aggregate';
+import { Aggregate, AggregateHandlerFunction, AggregateProjectionFunction, AnyAggregate, AnyAggregateConfig, createAggregate, GetAggregateFunction, UpdateAggregateFunction } from '../aggregate';
 
 export const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 export const nextTick = () => delay(0);
