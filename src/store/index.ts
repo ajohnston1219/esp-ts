@@ -156,7 +156,7 @@ export class MessageStore implements MessageStore {
     }
 
     public bindAggregate<A extends AnyAggregate, FR extends string>(aggregate: A): void {
-        this.bindComponent<AggregateComponent<A['config']>, FR>(aggregate.component);
+        this.bindComponent<A['component'], FR>(aggregate.component as any);
     }
 
     public async stopDispatchers(): Promise<void> {
