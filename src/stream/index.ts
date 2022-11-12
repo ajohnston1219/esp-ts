@@ -57,6 +57,11 @@ export type MessageHooks<Schema extends AnyChannelSchema> = {
     [Tag in ChannelTags<Schema>]: MessageHook<MessageType<ChannelSchemas<Schema, Tag>>>;
 }
 
+export const getStreamName = <Schema extends AnyChannelSchema>(schema: Schema) => (id: string) => ({
+    channel: schema.name,
+    service: schema.service,
+    id,
+});
 export function getMessageCreators<Schema extends AnyChannelSchema>(
     schema: Schema,
     hooks?: MessageHooks<Schema>,
@@ -66,7 +71,7 @@ export function getMessageCreators<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr as any)),
+        [curr]: getMessageCreator(schema.schemas[curr]._tag, getStreamName(schema), getHooks(curr as any)),
     }), {} as any);
     return creators;
 }
@@ -81,7 +86,7 @@ export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schemas[curr]._tag, getHooks(curr as any))(traceId)(id),
+        [curr]: getMessageCreator(schema.schemas[curr]._tag, getStreamName(schema), getHooks(curr as any))(traceId)(id),
     }), {} as any);
     return creators;
 }

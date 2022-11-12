@@ -35,10 +35,12 @@ describe('Channel', () => {
         // Assert
         expect(addEvent.traceId).toBe(traceId);
         expect(addEvent.aggregateId).toBe(addId);
+        expect(addEvent.streamName).toStrictEqual({ channel: 'math', service: 'my-service', id: addId });
         expect(addEvent._tag).toBe('Add'); 
         expect(addEvent.payload.amount).toBe(5);
         expect(subtractEvent.traceId).toBe(traceId);
         expect(subtractEvent.aggregateId).toBe(subtractId);
+        expect(subtractEvent.streamName).toStrictEqual({ channel: 'math', service: 'my-service', id: subtractId });
         expect(subtractEvent._tag).toBe('Subtract');
         expect(subtractEvent.payload.amount).toBe(-2);
     })

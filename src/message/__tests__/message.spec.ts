@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { getMessageCreator, Message, MessagePayload, MessageSchema } from '..';
-import { generateId } from '../../stream';
+import { AggregateId, generateId } from '../../stream';
 
 describe('Message', () => {
     it('Successfully creates a schema', () => {
@@ -13,7 +13,8 @@ describe('Message', () => {
         }
         const id = generateId();
         const traceId = generateId();
-        const addEvent = getMessageCreator<typeof messageSchema>('Add')(traceId)(id);
+        const getStreamName = (id: AggregateId) => ({ service: 'my-service', channel: 'math', id });
+        const addEvent = getMessageCreator<typeof messageSchema>('Add', getStreamName)(traceId)(id);
         const amount = 4;
 
         // Act

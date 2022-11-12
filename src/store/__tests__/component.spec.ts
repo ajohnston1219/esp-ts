@@ -39,7 +39,11 @@ describe('Message Store Bound Components', () => {
         const messages = await messageStore.getTrace(traceId);
         expect(messages.length).toBe(2);
         expect(messages[0].message._tag).toBe('Ping');
+        expect(messages[0].traceId).toBe(traceId);
+        expect(messages[0].streamName).toStrictEqual({ service: 'my-service', channel: 'ping', id });
         expect(messages[1].message._tag).toBe('Pong');
+        expect(messages[1].traceId).toBe(traceId);
+        expect(messages[1].streamName).toStrictEqual({ service: 'my-service', channel: 'pong', id });
     });
 
 })

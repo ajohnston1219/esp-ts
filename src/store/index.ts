@@ -90,6 +90,7 @@ export class MessageStore implements MessageStore {
         this._emitter = new EventEmitter({ captureRejections: true });
         const obs = fromEvent(this._emitter, 'message') as Observable<StoredMessage<AnyMessage>>;
         this._messageStream = obs.pipe(
+            distinct(({ id }) => id),
             shareReplay({
                 bufferSize: 1000, // TODO(adam): Configurable
                 refCount: false,
@@ -138,11 +139,7 @@ export class MessageStore implements MessageStore {
                 const payload = (msg as any).payload;
                 const message: OutgoingMessage<ComponentMessageType<AnyComponent, 'Out'>> = {
                     traceId: msg.traceId,
-                    streamName: {
-                        service: msg.service,
-                        channel: msg.channel,
-                        id: msg.aggregateId,
-                    },
+                    streamName: msg.streamName,
                     message: payload ? {
                         _tag: msg._tag,
                         payload,
