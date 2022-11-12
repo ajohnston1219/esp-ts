@@ -1,16 +1,18 @@
-import { AnyMessage, generateMessageId, Message, MessagePayload, MessageTag, OutgoingMessage, StoredMessage, TraceId } from '../message';
-import { AggregateId, channelEquals, streamEquals } from '../stream';
-import { concat, concatMap, distinct, filter, from, fromEvent, map, Observable, shareReplay, Subscription, tap } from 'rxjs';
+import { AnyMessage, generateMessageId, OutgoingMessage, StoredMessage, TraceId } from '../message';
+import { AggregateId, AnyChannelSchema, channelEquals, streamEquals } from '../stream';
+import { concat, concatMap, distinct, filter, from, fromEvent, lastValueFrom, map, Observable, shareReplay, Subscription } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
-import { AnyComponent, AnyComponentConfig, Component, ComponentMessageType } from '../component';
-import { AggregateComponent, AggregateMessageType, AnyAggregate, AnyAggregateConfig } from '../aggregate';
+import { AnyComponent, AnyComponentConfig, Component, ComponentConfig, ComponentMessageType } from '../component';
+import { Aggregate, AggregateComponent, AggregateConfig, AggregateMessageType, AnyAggregate, AnyAggregateConfig, ProjectionResult, ProjectionResultWithVersion } from '../aggregate';
 
 interface LogResult {
     readonly id: AggregateId;
     readonly version: number;
     readonly depth: number;
 }
+
+export type AggregateResult<A extends AnyAggregateConfig, FR extends string> = ProjectionResultWithVersion<A, FR>;
 
 interface MessageStoreDB {
     logMessage(message: OutgoingMessage<AnyMessage>): Promise<LogResult>;
@@ -131,13 +133,13 @@ export class MessageStore implements MessageStore {
         this._subscriptions.push(sub);
     }
 
-    public bindComponent<C extends AnyComponentConfig, FR extends string>(component: Component<C, FR>): void {
-        const dispatcher = Dispatcher.fromComponent<C, FR>(component);
+    public bindComponent<C extends AnyComponentConfig>(component: Component<C, string>): void {
+        const dispatcher = Dispatcher.fromComponent(component);
         this.bindDispatcher(dispatcher);
         this.bindOutputStream(component.outbox.pipe(
             map(msg => {
                 const payload = (msg as any).payload;
-                const message: OutgoingMessage<ComponentMessageType<AnyComponent, 'Out'>> = {
+                const message: OutgoingMessage<AnyMessage> = {
                     traceId: msg.traceId,
                     streamName: msg.streamName,
                     message: payload ? {
@@ -152,8 +154,20 @@ export class MessageStore implements MessageStore {
         ));
     }
 
-    public bindAggregate<A extends AnyAggregate, FR extends string>(aggregate: A): void {
-        this.bindComponent<A['component'], FR>(aggregate.component as any);
+    public bindAggregate<A extends AnyAggregateConfig>(aggregate: Aggregate<A, string>): void {
+        this.bindComponent(aggregate.component);
+    }
+
+    public getAggregate<A extends AnyAggregateConfig, FR extends string>(
+        aggregate: Aggregate<A, FR>
+    ): (id: AggregateId) => Promise<AggregateResult<A, FR>> {
+        return async (id: AggregateId) => {
+            const stream = this._db.getAggregateStream(aggregate.config)(id).pipe(
+                map(msg => ({ ...msg.message })),
+            );
+            const result = await aggregate.hydrate(id, stream);
+            return result as AggregateResult<A, FR>;
+        }
     }
 
     public async stopDispatchers(): Promise<void> {

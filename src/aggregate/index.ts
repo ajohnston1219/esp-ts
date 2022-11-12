@@ -1,6 +1,6 @@
 import { concatMap, lastValueFrom, mergeScan, Observable, scan } from 'rxjs';
 import { z } from 'zod';
-import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, createComponent } from '../component';
+import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, ComponentType, createComponent } from '../component';
 import { MessageResult } from '../message';
 import { AggregateId, AnyChannelSchema } from '../stream';
 import { KeysOfUnion } from '../utils/types';
@@ -9,14 +9,20 @@ export type ProjectionSuccess<A extends AnyAggregateConfig> = {
     readonly _tag: 'Success';
     readonly state: AggregateState<A>;
 }
+export type ProjectionSuccessWithVersion<A extends AnyAggregateConfig> = ProjectionSuccess<A> & { version: number };
 export type ProjectionFailure<FR extends string> = {
     readonly _tag: 'Failure';
     readonly reason: FR;
     readonly message: string;
 }
 export type ProjectionResult<A extends AnyAggregateConfig, FR extends string> = ProjectionSuccess<A> | ProjectionFailure<FR>;
+export type ProjectionResultWithVersion<A extends AnyAggregateConfig, FR extends string> = ProjectionSuccessWithVersion<A> | ProjectionFailure<FR>;
 export type ProjectionAPI<A extends AnyAggregateConfig, FR extends string> = {
     readonly success: (state: AggregateState<A>) => ProjectionSuccess<A>;
+    readonly failure: (reason: FR, message: string) => ProjectionFailure<FR>;
+}
+export type ProjectionAPIWithVersion<A extends AnyAggregateConfig, FR extends string> = {
+    readonly success: (state: AggregateState<A>, version: number) => ProjectionSuccess<A> & { version: number };
     readonly failure: (reason: FR, message: string) => ProjectionFailure<FR>;
 }
 export type AggregateProjectionFunction<A extends AnyAggregateConfig, FR extends string> =
@@ -58,7 +64,7 @@ export type AggregateComponent<A extends AnyAggregateConfig> =
     >;
 
 export type HydrateFunction<A extends AnyAggregateConfig, FR extends string> =
-    (id: AggregateId, event$: Observable<AggregateMessageType<A, 'events'>>) => Promise<ProjectionResult<A, FR>>;
+    (id: AggregateId, event$: Observable<AggregateMessageType<A, 'events'>>) => Promise<ProjectionResultWithVersion<A, FR>>;
 export interface Aggregate<Config extends AnyAggregateConfig, FailureReason extends string> {
     readonly config: Config;
     readonly component: Component<AggregateComponent<Config>, FailureReason>;
@@ -67,10 +73,10 @@ export interface Aggregate<Config extends AnyAggregateConfig, FailureReason exte
 }
 export type AnyAggregate = Aggregate<AnyAggregateConfig, string>;
 
-export type GetAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPI<A, FR>) => (id: AggregateId) =>
-    Promise<ProjectionResult<A, FR>>;
-export type UpdateAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPI<A, FR>) => (id: AggregateId, state: AggregateState<A>) =>
-    Promise<ProjectionResult<A, FR>>;
+export type GetAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPIWithVersion<A, FR>) => (id: AggregateId) =>
+    Promise<ProjectionResultWithVersion<A, FR>>;
+export type UpdateAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPIWithVersion<A, FR>) => (id: AggregateId, state: AggregateState<A>, version: number) =>
+    Promise<ProjectionResultWithVersion<A, FR>>;
 export type AggregateHandlerFunction<A extends AnyAggregateConfig, FR extends string> =
     ComponentHandlerFunction<AggregateComponent<A>, FR>;
 
@@ -87,15 +93,19 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
         success: (state) => ({ _tag: 'Success', state }),
         failure: (reason, message) => ({ _tag: 'Failure', reason, message }),
     }
+    const internalApi: ProjectionAPIWithVersion<Config, FailureReason> = {
+        success: (state, version) => ({ _tag: 'Success', state, version }),
+        failure: (reason, message) => ({ _tag: 'Failure', reason, message }),
+    }
 
-    const component = createComponent<Comp, FailureReason>({
+    const component: ComponentType<Comp, FailureReason> = createComponent<Comp, FailureReason>({
         name: config.name,
         inputChannels: config.schema.commands as any,
         outputChannels: config.schema.events as any,
     }, handler);
 
     const doProject = async (event: MessageResult<any>) => {
-        const getResult = await get(api)(event.aggregateId);
+        const getResult = await get(internalApi)(event.aggregateId);
         if (getResult._tag === 'Failure') {
             return { ...getResult, traceId: event.traceId };
         }
@@ -103,28 +113,28 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
         if (result._tag === 'Failure') {
             return { ...result, traceId: event.traceId };
         }
-        const updateResult = await update(api)(event.aggregateId, result.state);
+        const updateResult = await update(internalApi)(event.aggregateId, result.state, getResult.version + 1);
         return { ...updateResult, traceId: event.traceId };
     }
 
     const hydrate: HydrateFunction<Config, FailureReason> = async (id, event$) => {
         const obs = event$.pipe(
-            scan((lastResult, event) => {
+            scan((lastResult, event, index) => {
                 if (lastResult._tag === 'Failure') {
                     return lastResult;
                 }
                 const result = project(api)(lastResult.state, event);
-                return result;
-            }, { _tag: 'Success', state: config.initialState } as ProjectionResult<Config, FailureReason>),
+                return { ...result, version: index + 1 };
+            }, { _tag: 'Success', state: config.initialState, version: 0 } as ProjectionResultWithVersion<Config, FailureReason>),
         );
         const result = await lastValueFrom(obs, { defaultValue: null });
         if (result === null) {
-            return api.success(config.initialState);
+            return internalApi.success(config.initialState, 0);
         }
         if (result._tag === 'Failure') {
             return result;
         }
-        const updateResult = await update(api)(id, result.state);
+        const updateResult = await update(internalApi)(id, result.state, result.version);
         return updateResult;
     }
 
@@ -133,7 +143,7 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
     return {
         config,
         component,
-        get: get(api),
+        get: get(internalApi),
         hydrate,
     };
 }

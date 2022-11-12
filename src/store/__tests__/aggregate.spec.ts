@@ -1,8 +1,10 @@
 import { InMemoryMessageStoreDB, MessageStore } from '..';
-import { generateId } from '../../stream';
+import { AnyChannelSchema, generateId } from '../../stream';
 import { createMathAggregate, nextTick } from '../../utils/tests';
-import { AggregateComponent, ProjectionSuccess } from '../../aggregate';
+import { Aggregate, AggregateComponent, AnyAggregate, AnyAggregateConfig, AnyAggregateSchema, ChannelKeys, CommandSchemas, ProjectionSuccess, ProjectionSuccessWithVersion } from '../../aggregate';
 import { generateTraceId } from '../../message';
+import { AnyComponentConfig, Component, ComponentTags, ComponentType } from '../../component';
+import { KeysOfUnion } from '../../utils/types';
 
 describe('Message Store Bound Aggregate', () => {
 
@@ -19,15 +21,35 @@ describe('Message Store Bound Aggregate', () => {
         const aggregate = createMathAggregate();
         messageStore.bindAggregate(aggregate as any);
         const commands = aggregate.component.messages.recv(traceId)['math:command'](id);
+
+        // Act
         commands.add(5);
         commands.subtract(7);
         commands.add(4);
         await nextTick();
 
-        // Act
-
         // Assert
         const actualState = await aggregate.get(id) as ProjectionSuccess<typeof aggregate.config>;
+        expect(actualState.state.total).toBe(2);
+
+    });
+
+    it('properly fetches aggregate', async () => {
+        // Arrange
+        const id = generateId();
+        const traceId = generateTraceId();
+        const aggregate = createMathAggregate();
+        messageStore.bindAggregate(aggregate);
+        const commands = aggregate.component.messages.recv(traceId)['math:command'](id);
+
+        // Act
+        commands.add(5);
+        commands.subtract(7);
+        commands.add(4);
+        await nextTick();
+
+        // Assert
+        const actualState = await messageStore.getAggregate(aggregate)(id) as ProjectionSuccessWithVersion<typeof aggregate.config>;
         expect(actualState.state.total).toBe(2);
 
     });

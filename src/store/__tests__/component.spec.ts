@@ -1,5 +1,5 @@
 import { InMemoryMessageStoreDB, MessageStore } from '..';
-import { AnyComponent, AnyComponentConfig, Component, ComponentChannelSchemas, ComponentTags, ComponentType, createComponent } from '../../component';
+import { AnyComponent, AnyComponentConfig, Component, ComponentChannelNames, ComponentChannelSchema, ComponentChannelSchemas, ComponentTags, ComponentType, createComponent } from '../../component';
 import { generateTraceId, TraceId } from '../../message';
 import { generateId } from '../../stream';
 import { createPingPongComponentConfig, delay, nextTick } from '../../utils/tests';
@@ -24,6 +24,11 @@ describe('Message Store Bound Components', () => {
                     return c.success();
             }
         });
+
+        type _InTags = ComponentTags<ComponentChannelSchema<typeof component.config, 'ping', 'In'>>;
+        type _OutTags = ComponentTags<ComponentChannelSchemas<typeof component.config, 'Out'>>;
+        type _InNames = ComponentChannelNames<typeof component.config, 'In'>;
+        type _OutNames = ComponentChannelNames<typeof component.config, 'Out'>;
 
         // Act
         await messageStore.logMessage({

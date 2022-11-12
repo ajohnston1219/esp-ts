@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Aggregate, AggregateHandlerFunction, AggregateProjectionFunction, AnyAggregate, AnyAggregateConfig, createAggregate, GetAggregateFunction, UpdateAggregateFunction } from '../aggregate';
+import { ChannelSchema } from '../stream';
 
 export const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 export const nextTick = () => delay(0);
@@ -54,6 +55,7 @@ export function createMathAggregate() {
 
     const initialState: z.infer<typeof stateSchema> = { total: 0 };
     let state = { ...initialState };
+    let version = 0;
 
     const config = {
         name: 'math' as const,
@@ -86,10 +88,11 @@ export function createMathAggregate() {
                 return success({ ...state, total: state.total - event.payload });
         }
     }
-    const get: GetAggregateFunction<typeof config, string> = ({ success }) => async () => success(state);
+    const get: GetAggregateFunction<typeof config, string> = ({ success }) => async () => success(state, version);
     const update: UpdateAggregateFunction<typeof config, string> = ({ success }) => async (id, s) => {
         state = s;
-        return success(s);
+        version = version + 1;
+        return success(s, version);
     }
     const aggregate = createAggregate(config, handler, project, get, update);
     return aggregate;
