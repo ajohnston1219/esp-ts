@@ -49,7 +49,7 @@ describe('Aggregate', () => {
         await aggregate.hydrate(id, event$);
 
         // Assert
-        const actualState = await aggregate.get(id) as ProjectionSuccess<typeof aggregate.config>;
-        expect(actualState.state).toStrictEqual(aggregate.config.initialState);
+        const actualState = await aggregate.get(id);
+        expect(actualState._tag).toBe('NotFound');
     });
 })

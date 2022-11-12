@@ -1,10 +1,8 @@
 import { InMemoryMessageStoreDB, MessageStore } from '..';
-import { AnyChannelSchema, generateId } from '../../stream';
+import { generateId } from '../../stream';
 import { createMathAggregate, nextTick } from '../../utils/tests';
-import { Aggregate, AggregateComponent, AnyAggregate, AnyAggregateConfig, AnyAggregateSchema, ChannelKeys, CommandSchemas, ProjectionSuccess, ProjectionSuccessWithVersion } from '../../aggregate';
+import { ProjectionSuccess, ProjectionSuccessWithVersion } from '../../aggregate';
 import { generateTraceId } from '../../message';
-import { AnyComponentConfig, Component, ComponentTags, ComponentType } from '../../component';
-import { KeysOfUnion } from '../../utils/types';
 
 describe('Message Store Bound Aggregate', () => {
 
@@ -51,7 +49,7 @@ describe('Message Store Bound Aggregate', () => {
         // Assert
         const actualState = await messageStore.getAggregate(aggregate)(id) as ProjectionSuccessWithVersion<typeof aggregate.config>;
         expect(actualState.state.total).toBe(2);
-
+        expect(actualState.version).toBe(3);
     });
 
 });

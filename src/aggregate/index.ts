@@ -9,6 +9,9 @@ export type ProjectionSuccess<A extends AnyAggregateConfig> = {
     readonly _tag: 'Success';
     readonly state: AggregateState<A>;
 }
+export type ProjectionNotFound = {
+    readonly _tag: 'NotFound';
+}
 export type ProjectionSuccessWithVersion<A extends AnyAggregateConfig> = ProjectionSuccess<A> & { version: number };
 export type ProjectionFailure<FR extends string> = {
     readonly _tag: 'Failure';
@@ -17,6 +20,8 @@ export type ProjectionFailure<FR extends string> = {
 }
 export type ProjectionResult<A extends AnyAggregateConfig, FR extends string> = ProjectionSuccess<A> | ProjectionFailure<FR>;
 export type ProjectionResultWithVersion<A extends AnyAggregateConfig, FR extends string> = ProjectionSuccessWithVersion<A> | ProjectionFailure<FR>;
+export type ProjectionFetchResult<A extends AnyAggregateConfig, FR extends string> = ProjectionResult<A, FR> | ProjectionNotFound;
+export type ProjectionFetchResultWithVersion<A extends AnyAggregateConfig, FR extends string> = ProjectionResultWithVersion<A, FR> | ProjectionNotFound;
 export type ProjectionAPI<A extends AnyAggregateConfig, FR extends string> = {
     readonly success: (state: AggregateState<A>) => ProjectionSuccess<A>;
     readonly failure: (reason: FR, message: string) => ProjectionFailure<FR>;
@@ -24,6 +29,9 @@ export type ProjectionAPI<A extends AnyAggregateConfig, FR extends string> = {
 export type ProjectionAPIWithVersion<A extends AnyAggregateConfig, FR extends string> = {
     readonly success: (state: AggregateState<A>, version: number) => ProjectionSuccess<A> & { version: number };
     readonly failure: (reason: FR, message: string) => ProjectionFailure<FR>;
+}
+export type ProjectionFetchAPI<A extends AnyAggregateConfig, FR extends string> = ProjectionAPIWithVersion<A, FR> & {
+    readonly notFound: () => ProjectionNotFound;
 }
 export type AggregateProjectionFunction<A extends AnyAggregateConfig, FR extends string> =
     (api: ProjectionAPI<A, FR>) => (state: AggregateState<A>, event: ComponentMessageType<AggregateComponent<A>, 'Out'>) => ProjectionResult<A, FR>;
@@ -73,10 +81,10 @@ export interface Aggregate<Config extends AnyAggregateConfig, FailureReason exte
 }
 export type AnyAggregate = Aggregate<AnyAggregateConfig, string>;
 
-export type GetAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPIWithVersion<A, FR>) => (id: AggregateId) =>
-    Promise<ProjectionResultWithVersion<A, FR>>;
-export type UpdateAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPIWithVersion<A, FR>) => (id: AggregateId, state: AggregateState<A>, version: number) =>
-    Promise<ProjectionResultWithVersion<A, FR>>;
+export type GetAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionFetchAPI<A, FR>) => (id: AggregateId) =>
+    Promise<ProjectionFetchResultWithVersion<A, FR>>;
+export type UpdateAggregateFunction<A extends AnyAggregateConfig, FR extends string> = (api: ProjectionAPI<A, FR>) => (id: AggregateId, state: AggregateState<A>, version: number) =>
+    Promise<ProjectionResult<A, FR>>;
 export type AggregateHandlerFunction<A extends AnyAggregateConfig, FR extends string> =
     ComponentHandlerFunction<AggregateComponent<A>, FR>;
 
@@ -97,6 +105,10 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
         success: (state, version) => ({ _tag: 'Success', state, version }),
         failure: (reason, message) => ({ _tag: 'Failure', reason, message }),
     }
+    const fetchApi: ProjectionFetchAPI<Config, FailureReason> = {
+        ...internalApi,
+        notFound: () => ({ _tag: 'NotFound' }),
+    };
 
     const component: ComponentType<Comp, FailureReason> = createComponent<Comp, FailureReason>({
         name: config.name,
@@ -105,15 +117,21 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
     }, handler);
 
     const doProject = async (event: MessageResult<any>) => {
-        const getResult = await get(internalApi)(event.aggregateId);
+        const getResult = await get(fetchApi)(event.aggregateId);
         if (getResult._tag === 'Failure') {
             return { ...getResult, traceId: event.traceId };
         }
-        const result = project(api)(getResult.state, event);
+        let result: ProjectionResult<Config, FailureReason>;
+        const version = getResult._tag === 'NotFound' ? 0 : getResult.version;
+        if (getResult._tag === 'NotFound') {
+            result = project(api)(config.initialState, event);
+        } else {
+            result = project(api)(getResult.state, event);
+        }
         if (result._tag === 'Failure') {
             return { ...result, traceId: event.traceId };
         }
-        const updateResult = await update(internalApi)(event.aggregateId, result.state, getResult.version + 1);
+        const updateResult = await update(api)(event.aggregateId, result.state, version + 1);
         return { ...updateResult, traceId: event.traceId };
     }
 
@@ -129,13 +147,14 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
         );
         const result = await lastValueFrom(obs, { defaultValue: null });
         if (result === null) {
-            return internalApi.success(config.initialState, 0);
+            const newResult = internalApi.success(config.initialState, 0);
+            return newResult;
         }
         if (result._tag === 'Failure') {
             return result;
         }
-        const updateResult = await update(internalApi)(id, result.state, result.version);
-        return updateResult;
+        const updateResult = await update(api)(id, result.state, result.version);
+        return { ...updateResult, version: result.version };
     }
 
     component.outbox.pipe(concatMap(msg => doProject(msg))).subscribe();
@@ -143,7 +162,7 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
     return {
         config,
         component,
-        get: get(internalApi),
+        get: get(fetchApi),
         hydrate,
     };
 }
