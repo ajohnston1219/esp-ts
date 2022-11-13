@@ -1,4 +1,4 @@
-import { concatMap, lastValueFrom, mergeScan, Observable, scan } from 'rxjs';
+import { concatMap, lastValueFrom, Observable, scan } from 'rxjs';
 import { z } from 'zod';
 import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, ComponentType, createComponent } from '../component';
 import { MessageResult } from '../message';
@@ -52,6 +52,7 @@ export interface AggregateConfig<Name extends string, A extends AnyAggregateSche
     readonly initialState: z.infer<A['state']>;
     readonly schema: A;
 }
+
 export type AnyAggregateConfig = AggregateConfig<string, AnyAggregateSchema>;
 export type AggregateState<A extends AnyAggregateConfig> = z.infer<A['schema']['state']>;
 type ChannelType = 'commands' | 'events';

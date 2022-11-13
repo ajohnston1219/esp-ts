@@ -1,7 +1,7 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, TraceId } from '../message';
-import * as uuid from 'uuid';
+import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageHook, MessagePayload, MessageTag, MessageType, NoMessageSchema, TraceId } from '../message';
 import { KeysOfUnion } from '../utils/types';
-import { Schema } from 'zod';
+import { z } from 'zod';
+import * as uuid from 'uuid';
 
 export type AggregateId = string;
 export const generateId = uuid.v4;
@@ -43,6 +43,16 @@ export interface ChannelSchema<N extends string, Schema extends AnyMessageSchema
     }
 }
 export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema, string>;
+export type IgnoreChannel = ChannelSchema<'__IGNORE__', NoMessageSchema>;
+export const ignoreChannel = (): { '__IGNORE__': IgnoreChannel } => ({
+    '__IGNORE__': {
+        name: '__IGNORE__' as const,
+        service: '__LOCAL__' as const,
+        schemas: {
+            '__IGNORE__': { _tag: '__IGNORE__', schema: z.undefined() },
+        },
+    },
+});
 export type ChannelName<Schema extends AnyChannelSchema> = Schema['name'];
 export type ChannelTags<Schema extends AnyChannelSchema> = KeysOfUnion<Schema['schemas']>;
 export type ChannelSchemas<Schema extends AnyChannelSchema, T extends ChannelTags<Schema> = ChannelTags<Schema>> = Schema['schemas'][T];

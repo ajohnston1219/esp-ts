@@ -25,11 +25,6 @@ describe('Message Store Bound Components', () => {
             }
         });
 
-        type _InTags = ComponentTags<ComponentChannelSchema<typeof component.config, 'ping', 'In'>>;
-        type _OutTags = ComponentTags<ComponentChannelSchemas<typeof component.config, 'Out'>>;
-        type _InNames = ComponentChannelNames<typeof component.config, 'In'>;
-        type _OutNames = ComponentChannelNames<typeof component.config, 'Out'>;
-
         // Act
         await messageStore.logMessage({
             traceId,

@@ -32,6 +32,7 @@ export interface MessageSchema<Tag extends string, Z extends Zod.ZodTypeAny> {
     readonly schema: Z;
 }
 export type AnyMessageSchema = MessageSchema<string, Zod.ZodTypeAny>;
+export type NoMessageSchema = MessageSchema<'__IGNORE__', z.ZodUndefined>;
 export type MessageTag<M extends AnyMessageSchema> = M['_tag'];
 export type MessagePayload<M extends AnyMessageSchema> = z.infer<M['schema']>;
 export type MessageType<M extends AnyMessageSchema> = Message<MessageTag<M>, MessagePayload<M>>;

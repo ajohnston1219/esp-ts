@@ -1,6 +1,6 @@
-import { fromEvent, lastValueFrom, Observable, shareReplay, takeUntil } from "rxjs";
+import { concatMap, fromEvent, lastValueFrom, Observable, shareReplay, takeUntil } from "rxjs";
 import { AnyMessage, IncomingMessage, MessageCreatorNoId, MessageResult, MessageType, TraceId } from "../message";
-import { AggregateId, AnyChannelSchema, ChannelSchema, ChannelSchemas, getMessageCreatorsNoId, MessageHooks } from "../stream";
+import { AggregateId, AnyChannelSchema, getMessageCreatorsNoId, MessageHooks } from "../stream";
 import { EventEmitter } from 'node:events';
 import { KeysOfUnion } from "../utils/types";
 
@@ -39,9 +39,9 @@ export type Component<Config extends AnyComponentConfig, FailureReason extends s
     readonly stop: () => Promise<void>;
 };
 
-export function createComponent<C extends AnyComponentConfig, FR extends string>(
+export function createComponent<C extends AnyComponentConfig, FR extends string, CanSend extends boolean = true>(
     config: C,
-    handler: ComponentHandlerFunction<C, FR>,
+    handler: ComponentHandlerFunction<C, FR, CanSend>,
 ): Component<C, FR> {
 
     type InResult = MessageResult<InMessage<C>>;
@@ -74,9 +74,7 @@ export function createComponent<C extends AnyComponentConfig, FR extends string>
         });
     }
 
-    const inSub = inbox.subscribe({
-        next: (msg) => handle(msg),
-    });
+    const inSub = inbox.pipe(concatMap(async msg => handle(msg))).subscribe();
     const outSub = outbox.subscribe();
 
     const stop = async () => {
@@ -177,15 +175,21 @@ type ComponentHandlerFailure<FailureReason extends string> = {
     message: string,
 }
 export type ComponentHandlerResult<FailureReason extends string> = ComponentHandlerFailure<FailureReason> | ComponentHandlerSuccess;
-export type ComponentAPI<Config extends AnyComponentConfig, FR extends string> = {
-    send: {
-        [N in ComponentChannelNames<Config, 'Out'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'Out'>;
-    },
+export type ComponentAPINoSend<FR extends string> = {
     success: () => ComponentHandlerSuccess;
     failure: (reason: FR, message: string) => ComponentHandlerFailure<FR>;
 }
-export type ComponentHandlerFunction<Config extends AnyComponentConfig, FailureReason extends string> =
-    (component: ComponentAPI<Config, FailureReason>) => (msg: MessageResult<InMessage<Config>>) => Promise<ComponentHandlerResult<FailureReason>>;
+export type ComponentAPISend<Config extends AnyComponentConfig, FR extends string> = {
+    send: {
+        [N in ComponentChannelNames<Config, 'Out'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'Out'>;
+    },
+} & ComponentAPINoSend<FR>;
+export type ComponentAPI<Config extends AnyComponentConfig, FR extends string, CanSend extends boolean = true> = CanSend extends true
+    ? ComponentAPISend<Config, FR>
+    : ComponentAPINoSend<FR>;
+export type ComponentHandlerFunction<Config extends AnyComponentConfig, FailureReason extends string, CanSend extends boolean = true> =
+    (component: ComponentAPI<Config, FailureReason, CanSend>) =>
+        (msg: MessageResult<InMessage<Config>>) => Promise<ComponentHandlerResult<FailureReason>>;
 
 export type ComponentMessageCreators<C extends AnyComponentConfig, N extends ComponentChannelNames<C, CT>, CT extends ChannelType> = {
     [Tag in ComponentTags<ComponentChannelSchema<C, N, CT>>]: MessageCreatorNoId<ComponentChannelSchema<C, N, CT>['schemas'][Tag]>;
