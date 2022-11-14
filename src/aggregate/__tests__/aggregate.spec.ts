@@ -13,9 +13,9 @@ describe('Aggregate', () => {
 
         // Act
         const commands = aggregate.component.messages.recv(traceId)['math:command'](id);
-        commands.add(5);
-        commands.subtract(7);
-        commands.add(4);
+        commands.Add(5);
+        commands.Subtract(7);
+        commands.Add(4);
         await nextTick();
 
         // Assert
@@ -31,7 +31,7 @@ describe('Aggregate', () => {
 
         // Act
         const events = aggregate.component.messages.create.send(traceId).math(id);
-        const event$ = of(events.added(2), events.subtracted(4), events.added(1));
+        const event$ = of(events.Added(2), events.Subtracted(4), events.Added(1));
         await aggregate.hydrate(id, event$);
 
         // Assert

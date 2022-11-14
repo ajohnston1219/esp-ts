@@ -1,6 +1,6 @@
 import { AnyMessage, generateMessageId, OutgoingMessage, StoredMessage, TraceId } from '../message';
 import { AggregateId, AnyChannelSchema, channelEquals, streamEquals } from '../stream';
-import { concat, concatMap, distinct, filter, from, fromEvent, lastValueFrom, map, Observable, shareReplay, Subscription } from 'rxjs';
+import { concat, concatMap, distinct, filter, from, fromEvent, lastValueFrom, map, Observable, shareReplay, Subscription, tap } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
 import { AnyComponent, AnyComponentConfig, Component, ComponentConfig, ComponentMessageType } from '../component';
@@ -51,10 +51,10 @@ export class InMemoryMessageStoreDB implements MessageStoreDB {
             const match = (msg: Msg) => {
                 return (
                     Object.keys(config.schema.events).some(key => {
-                        const event = config.schema.events[key];
+                        const eventSchema = (config.schema.events as any)[key];
                         return (
-                            event.service === msg.streamName.service
-                            && event.name === msg.streamName.channel
+                            eventSchema.service === msg.streamName.service
+                            && eventSchema._tag === msg.streamName.channel
                             && id === msg.streamName.id
                         );
                     })
@@ -105,7 +105,7 @@ export class MessageStore implements MessageStore {
     }
 
     public async logMessage(message: OutgoingMessage<AnyMessage>): Promise<LogResult> {
-        const result = this._db.logMessage(message);
+        const result = await this._db.logMessage(message);
         this._emitter.emit('message', message);
         return result;
     }
@@ -155,7 +155,7 @@ export class MessageStore implements MessageStore {
     }
 
     public bindAggregate<A extends AnyAggregateConfig>(aggregate: Aggregate<A, string>): void {
-        this.bindComponent(aggregate.component);
+        this.bindComponent(aggregate.component as any);
     }
 
     public getAggregate<A extends AnyAggregateConfig, FR extends string>(

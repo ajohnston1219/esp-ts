@@ -3,32 +3,37 @@ import { Schema, z } from 'zod';
 
 export type SchemaType = Zod.ZodTypeAny;
 
-export type SchemaDefinition<N extends string, T extends SchemaType> = {
-    readonly _tag: N;
+export type SchemaDefinition<N extends string, T extends SchemaType> = z.ZodObject<{
+    readonly _tag: z.ZodLiteral<N>;
     readonly schema: T;
-}
-export type TypeOfSchema<S extends AnySchemaDefinition> = z.infer<S['schema']>;
-export type SchemaTag<S extends AnySchemaDefinition> = S['_tag'];
+}>;
 export type AnySchemaDefinition = SchemaDefinition<string, SchemaType>;
-export type GetSchema<S extends AnySchemaDefinition, Tag extends SchemaTag<S>> = SchemaTag<S> extends Tag ? S : never;
+export type TypeOfSchema<S extends AnySchemaDefinition> = z.infer<S>['schema'];
+export type TypeOfDefinition<S extends AnySchemaDefinition> = z.infer<S>;
+export type SchemaTag<S extends AnySchemaDefinition> = z.infer<S>['_tag'];
+export type GetTaggedObject<TO extends { readonly _tag: string }, Tag extends string> = TO extends { readonly _tag: Tag } ? TO : never;
+export type GetSchema<S extends AnySchemaDefinition, Tag extends SchemaTag<S>> =
+    S extends z.ZodObject<{ readonly _tag: z.ZodLiteral<Tag> }> ? S : never;
 
 export type SchemaMap<N extends string, S extends AnySchemaDefinition> = {
     readonly _tag: N;
     readonly schema: {
-        [Tag in S['_tag']]: S extends { readonly _tag: Tag } ? S : never;
+        [Tag in SchemaTag<S>]: GetSchema<S, Tag>
     }
 }
 export type AnySchemaMap = SchemaMap<string, AnySchemaDefinition>;
 
 export type SchemaMapSchemas<M extends AnySchemaMap> = M['schema'][KeysOfUnion<M['schema']>];
-export type GetSchemaFromMap<M extends AnySchemaMap, Tag extends KeysOfUnion<M['schema']>> = GetSchema<M['schema'][Tag], Tag>;
+export type GetSchemaFromMap<M extends AnySchemaMap, Tag extends SchemaTag<M['schema'][KeysOfUnion<M['schema']>]>> =
+    GetSchema<M['schema'][Tag], Tag>;
 
-export const define = <T extends string, S extends SchemaType>(tag: T, schema: S): SchemaDefinition<T, S> => ({ _tag: tag, schema });
+export const define = <T extends string, S extends SchemaType>(tag: T, schema: S): SchemaDefinition<T, S> =>
+    z.object({ _tag: z.literal(tag), schema });
 
-export const defineMap = <N extends string, D extends SchemaDefinition<Tags, z.ZodTypeAny>, Tags extends string>(
+export const defineMap = <N extends string, D extends SchemaDefinition<string, z.ZodTypeAny>>(
     name: N,
-    schema: { [Tag in Tags]: D extends { readonly _tag: Tag } ? D : never },
+    schema: { [Tag in SchemaTag<D>]: GetSchema<D, Tag> },
 ): SchemaMap<N, D> => ({
     _tag: name,
-    schema,
+    schema: schema as any,
 });

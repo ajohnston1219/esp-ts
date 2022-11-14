@@ -21,9 +21,9 @@ describe('Message Store Bound Aggregate', () => {
         const commands = aggregate.component.messages.recv(traceId)['math:command'](id);
 
         // Act
-        commands.add(5);
-        commands.subtract(7);
-        commands.add(4);
+        commands.Add(5);
+        commands.Subtract(7);
+        commands.Add(4);
         await nextTick();
 
         // Assert
@@ -41,9 +41,9 @@ describe('Message Store Bound Aggregate', () => {
         const commands = aggregate.component.messages.recv(traceId)['math:command'](id);
 
         // Act
-        commands.add(5);
-        commands.subtract(7);
-        commands.add(4);
+        commands.Add(5);
+        commands.Subtract(7);
+        commands.Add(4);
         await nextTick();
 
         // Assert

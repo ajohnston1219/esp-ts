@@ -2,7 +2,7 @@ import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, Mes
 import { z } from 'zod';
 import * as uuid from 'uuid';
 import { KeysOfUnion } from '../utils/types';
-import { define, defineMap, GetSchema, SchemaDefinition, SchemaMap, SchemaType } from '../schema';
+import { define, defineMap, SchemaMap } from '../schema';
 
 export type AggregateId = string;
 export const generateId = uuid.v4;
@@ -40,15 +40,15 @@ export type ChannelSchema<N extends string, M extends AnyMessageSchema, S extend
     SchemaMap<N, M> & { readonly service: S };
 export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema, string>;
 
-export const defineChannel = <N extends string, M extends SchemaDefinition<Tags, SchemaType>[], S extends string, Tags extends string>(
+export const defineChannel = <N extends string, M extends AnyMessageSchema[], S extends string>(
     service: S,
     name: N,
     ...schemas: M
 ): ChannelSchema<N, M[number], S> => ({
     service,
-    ...defineMap<N, M[number], Tags>(name, schemas.reduce((acc, curr) => ({
+    ...defineMap<N, M[number]>(name, schemas.reduce((acc, curr) => ({
         ...acc,
-        [curr._tag]: curr,
+        [curr.shape._tag.value]: curr,
     }), {} as any)),
 });
 
@@ -90,7 +90,7 @@ export function getMessageCreators<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schema[curr]._tag as any, getStreamName(schema), getHooks(curr as any)),
+        [curr]: getMessageCreator(schema.schema[curr].shape._tag.value as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr as any)),
     }) as any, {} as any);
     return creators;
 }
@@ -105,7 +105,7 @@ export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
     };
     const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schema[curr]._tag as any, getStreamName(schema), getHooks(curr as any))(traceId)(id),
+        [curr]: getMessageCreator(schema.schema[curr].shape._tag.value as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr as any))(traceId)(id),
     }) as any, {} as any);
     return creators;
 }

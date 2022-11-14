@@ -1,6 +1,6 @@
 import { concatMap, lastValueFrom, Observable, scan } from 'rxjs';
 import { z } from 'zod';
-import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, ComponentType, createComponent } from '../component';
+import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, ComponentMessageTypes, ComponentType, createComponent } from '../component';
 import { MessageResult } from '../message';
 import { AggregateId, AnyChannelSchema } from '../stream';
 import { KeysOfUnion } from '../utils/types';
@@ -34,15 +34,15 @@ export type ProjectionFetchAPI<A extends AnyAggregateConfig, FR extends string> 
     readonly notFound: () => ProjectionNotFound;
 }
 export type AggregateProjectionFunction<A extends AnyAggregateConfig, FR extends string> =
-    (api: ProjectionAPI<A, FR>) => (state: AggregateState<A>, event: ComponentMessageType<AggregateComponent<A>, 'Out'>) => ProjectionResult<A, FR>;
+    (api: ProjectionAPI<A, FR>) => (state: AggregateState<A>, event: ComponentMessageTypes<AggregateComponent<A>, 'Out'>) => ProjectionResult<A, FR>;
 
 export interface AggregateSchema<StateSchema extends Zod.ZodTypeAny, CommandSchema extends AnyChannelSchema, EventSchema extends AnyChannelSchema> {
     readonly state: StateSchema;
     readonly commands: {
-        [Key in CommandSchema['name']]: CommandSchema
+        [Tag in CommandSchema['_tag']]: CommandSchema extends { readonly _tag: Tag } ? CommandSchema : never;
     }
     readonly events: {
-        [Key in EventSchema['name']]: EventSchema;
+        [Tag in EventSchema['_tag']]: EventSchema extends { readonly _tag: Tag } ? EventSchema : never;
     }
 }
 export type AnyAggregateSchema = AggregateSchema<Zod.ZodTypeAny, AnyChannelSchema, AnyChannelSchema>;
@@ -63,7 +63,7 @@ export type EventSchema<A extends AnyAggregateSchema, N extends ChannelKeys<A, '
 export type CommandSchemas<Config extends AnyAggregateSchema, N extends KeysOfUnion<Config['commands']>> = Config['commands'][N];
 export type EventSchemas<Config extends AnyAggregateSchema, N extends KeysOfUnion<Config['events']>> = Config['events'][N];
 export type AggregateMessageType<A extends AnyAggregateConfig, CT extends ChannelType> =
-    ComponentMessageType<AggregateComponent<A>, CT extends 'commands' ? 'In' : 'Out'>;
+    ComponentMessageTypes<AggregateComponent<A>, CT extends 'commands' ? 'In' : 'Out'>;
 
 export type AggregateComponent<A extends AnyAggregateConfig> =
     ComponentConfig<

@@ -1,8 +1,7 @@
 import { lastValueFrom } from 'rxjs';
 import { z } from 'zod';
-import { ComponentChannelSchema, ComponentMessageSchema, ComponentMessageTags, createComponent, InMessage } from '..';
-import { AnyMessageSchema, generateMessageId, generateTraceId, IncomingMessage, Message, MessageSchema, MessageSchemaMap, MessageTag, MessageType } from '../../message';
-import { WrapDefinition } from '../../schema';
+import { ComponentMessageSchema, createComponent, InMessage } from '..';
+import { generateMessageId, generateTraceId, IncomingMessage, Message } from '../../message';
 import { generateId } from '../../stream';
 import { createPingPongComponentConfig } from '../../utils/tests';
 
@@ -13,26 +12,6 @@ describe('Component', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
-        type C = typeof config;
-        type _IM = InMessage<C>;
-        type _MS = ComponentMessageSchema<C, 'In', 'ping'>;
-        type _WD = WrapDefinition<_MS>;
-        const z1 = z.object({
-            _tag: z.literal('One'),
-            payload: z.number(),
-        })
-        const z2 = z.object({
-            _tag: z.literal('Two'),
-            payload: z.string(),
-        })
-        type _ZT = typeof z1 | typeof z2;
-        type _ZTT = z.infer<_ZT>;
-        type _MTG = z.infer<_WD>;
-        type _MTT = Message<_MS['_tag'], _MS['schema']>;
-        type _MT = MessageType<ComponentMessageSchema<C, 'In', 'ping'>>;
-        type _CMS = ComponentChannelSchema<C, 'ping', 'In'>['schema'][ComponentMessageTags<C, 'In', 'ping'>];
-        type infer<S extends AnyMessageSchema> = {};
-        type _MST = C['inputChannels']['ping']['schema'][ComponentMessageTags<C, 'In', 'ping'>];
         const component = createComponent(config, (c) => async (msg) => {
             switch (msg._tag) {
                 case 'Ping':
@@ -46,7 +25,6 @@ describe('Component', () => {
 
         // Act
         component.messages.recv(traceId).ping(id).Ping();
-        component.messages.recv(traceId).ping(id).PingMultiple(0);
 
         // Assert
         const inSub = component.inbox.subscribe({

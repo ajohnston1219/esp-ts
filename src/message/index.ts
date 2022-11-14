@@ -1,10 +1,11 @@
 import { AggregateId, StreamName } from '../stream';
 import * as uuid from 'uuid';
-import { Schema, z } from 'zod';
-import { SchemaDefinition, SchemaMap, SchemaType, TypeOfSchema } from '../schema';
+import { z } from 'zod';
+import { SchemaDefinition, SchemaMap, SchemaTag, SchemaType, TypeOfDefinition, TypeOfSchema } from '../schema';
+import { RenameObject } from '../utils/types';
 
 export type Message<Tag extends string, Payload> = { readonly _tag: Tag, payload: Payload }
-export type AnyMessage = Message<string, any | undefined>;
+export type AnyMessage = Message<string, any>;
 
 export type MessageId = string;
 export const generateMessageId = uuid.v4;
@@ -32,9 +33,13 @@ export type AnyMessageSchema = MessageSchema<string, SchemaType>;
 export type MessageSchemaMap<N extends string, M extends AnyMessageSchema> = SchemaMap<N, M>;
 export type NoMessageSchema = MessageSchema<'__IGNORE__', z.ZodUndefined>;
 
-export type MessageTag<M extends AnyMessageSchema> = M['_tag'];
+export type MessageTag<M extends AnyMessageSchema> = SchemaTag<M>;
 export type MessagePayload<M extends AnyMessageSchema> = TypeOfSchema<M>;
-export type MessageType<M extends AnyMessageSchema> = Message<M['_tag'], z.infer<M['schema']>>;
+export type MessageType<M extends AnyMessageSchema> = {
+    [Tag in MessageTag<M>]: M extends z.ZodObject<{ readonly _tag: z.ZodLiteral<Tag> }>
+        ? Message<MessageTag<M>, MessagePayload<M>>
+        : never;
+}[MessageTag<M>];
 
 export type MessageResult<M extends AnyMessage> = { aggregateId: AggregateId, traceId: TraceId, streamName: StreamName } & M;
 export type MessageCreatorNoId<M extends AnyMessage> = M['payload'] extends undefined | void
@@ -71,7 +76,7 @@ export function getMessageCreator<T extends MessageTag<Schema>, Schema extends A
     tag: T,
     streamName: (id: AggregateId) => StreamName,
     hooks?: MessageHook<Message<T, Schema>>,
-): MessageCreator<Message<T, Schema>> {
+): MessageCreator<MessageType<Schema>> {
     return (traceId: TraceId) => (id: AggregateId) => (payload?: MessagePayload<Schema>) => {
         const message: any = createMessage<Schema>(traceId, id, streamName(id), tag, payload);
         if (hooks?.after) {

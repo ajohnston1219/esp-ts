@@ -1,6 +1,6 @@
 import { InMemoryMessageStoreDB, MessageStore } from '..';
-import { AnyComponent, AnyComponentConfig, Component, ComponentChannelNames, ComponentChannelSchema, ComponentChannelSchemas, ComponentTags, ComponentType, createComponent } from '../../component';
-import { generateTraceId, TraceId } from '../../message';
+import { createComponent } from '../../component';
+import { generateTraceId } from '../../message';
 import { generateId } from '../../stream';
 import { createPingPongComponentConfig, delay, nextTick } from '../../utils/tests';
 
@@ -20,7 +20,10 @@ describe('Message Store Bound Components', () => {
         const component = createComponent(config, (c) => async (msg) => {
             switch (msg._tag) {
                 case 'Ping':
-                    c.send.pong(msg.aggregateId).pong();
+                    c.send.pong(msg.aggregateId).Pong();
+                    return c.success();
+                case 'PingMultiple':
+                    c.send.pong(msg.aggregateId).PongMultiple(msg.payload);
                     return c.success();
             }
         });
@@ -29,7 +32,7 @@ describe('Message Store Bound Components', () => {
         await messageStore.logMessage({
             traceId,
             streamName: { service: 'my-service', channel: 'ping', id },
-            message: { _tag: 'Ping' },
+            message: { _tag: 'Ping', payload: undefined },
         });
         messageStore.bindComponent(component);
         await nextTick();

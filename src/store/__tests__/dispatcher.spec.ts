@@ -162,7 +162,10 @@ describe('Dispatcher', () => {
         const component = createComponent(config, (c) => async (msg) => {
             switch (msg._tag) {
                 case 'Ping':
-                    c.send.pong(id).pong();
+                    c.send.pong(id).Pong();
+                    return c.success();
+                case 'PingMultiple':
+                    c.send.pong(id).PongMultiple(msg.payload);
                     return c.success();
             }
         });
@@ -170,7 +173,7 @@ describe('Dispatcher', () => {
         await messageStore.logMessage({
             traceId,
             streamName: { service: 'my-service', channel: 'ping', id },
-            message: { _tag: 'Ping' },
+            message: { _tag: 'Ping', payload: undefined },
         });
 
         // Act

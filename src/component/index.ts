@@ -74,7 +74,10 @@ export function createComponent<C extends AnyComponentConfig, FR extends string,
         });
     }
 
-    const inSub = inbox.pipe(concatMap(async msg => handle(msg))).subscribe();
+    const handleMessage = async (msg: InResult) => {
+        await handle(msg);
+    }
+    const inSub = inbox.pipe(concatMap(async msg => handleMessage(msg))).subscribe();
     const outSub = outbox.subscribe();
 
     const stop = async () => {
@@ -219,6 +222,8 @@ export type ComponentMessageSchema<C extends AnyComponentConfig, CT extends Chan
 export type ComponentMessageSchemas<C extends AnyComponentConfig, CT extends ChannelType> =
     ComponentChannelSchema<C, ComponentChannelNames<C, CT>, CT>;
 export type ComponentMessageType<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT>> =
+    MessageType<ComponentMessageSchema<C, CT, N>>;
+export type ComponentMessageTypes<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT> = ComponentChannelNames<C, CT>> =
     MessageType<ComponentMessageSchema<C, CT, N>>;
 export type InMessage<C extends AnyComponentConfig> = ComponentMessageType<C, 'In', ComponentChannelNames<C, 'In'>>;
 export type OutMessage<C extends AnyComponentConfig> =
