@@ -38,32 +38,27 @@ export function createUpdate<N extends string, In extends z.ZodTypeAny, Out exte
         ...schema,
     };
 }
-type ViewQueryOrUpdateFunction<In extends z.ZodTypeAny, Out extends z.ZodTypeAny> = (input: z.infer<In>) => Promise<z.infer<Out>>;
-export type ViewQueryFunction<Q extends AnyQuery> = ViewQueryOrUpdateFunction<Q['schema']['input'], Q['schema']['output']>;
-export type ViewUpdateFunction<U extends AnyUpdate> = ViewQueryOrUpdateFunction<U['schema']['input'], U['schema']['output']>; 
 type AnyQuery = Query<string, z.ZodTypeAny, z.ZodTypeAny>;
 type AnyUpdate = Update<string, z.ZodTypeAny, z.ZodTypeAny>;
-export type QuerySchema<Q extends AnyQuery> = {
-    [N in Q['name']]: Query<N, Q['schema']['input'], Q['schema']['output']>;
-}
-export type UpdateSchema<U extends AnyUpdate> = {
-    [N in U['name']]: Update<N, U['schema']['input'], U['schema']['output']>;
-}
-export type AnyQuerySchema = QuerySchema<AnyQuery>;
-export type AnyUpdateSchema = UpdateSchema<AnyUpdate>;
+type QueryKeys<Q extends AnyQuery> = KeysOfUnion<Q['name']>
+type UpdateKeys<U extends AnyUpdate> = KeysOfUnion<U['name']>
 
 export interface ViewSchema<
     EventSchema extends AnyChannelSchema,
-    QuerySchema extends AnyQuerySchema,
-    UpdateSchema extends AnyUpdateSchema
+    QuerySchema extends AnyQuery,
+    UpdateSchema extends AnyUpdate
 > {
     readonly events: {
         [Key in EventSchema['name']]: EventSchema;
     };
-    readonly queries: QuerySchema;
-    readonly updates: UpdateSchema;
+    readonly queries: {
+        [Key in QuerySchema['name']]: QuerySchema;
+    }
+    readonly updates: {
+        [Key in UpdateSchema['name']]: UpdateSchema;
+    }
 }
-export type AnyViewSchema = ViewSchema<AnyChannelSchema, AnyQuerySchema, AnyUpdateSchema>;
+export type AnyViewSchema = ViewSchema<AnyChannelSchema, AnyQuery, AnyUpdate>;
 
 export interface ViewConfig<Name extends string, V extends AnyViewSchema> {
     readonly name: Name;
@@ -84,11 +79,13 @@ export type ViewComponent<V extends AnyViewConfig> =
     >;
 
 
-type QueryFunctionMap<V extends AnyViewConfig> = {
-    [Key in KeysOfUnion<V['schema']['queries']>]: ViewQueryFunction<V['schema']['queries'][Key]>;
+export type QueryMap<Config extends AnyViewConfig> = {
+    [Key in KeysOfUnion<Config['schema']['queries']>]: Query<Key, Config['schema']['queries'][Key]['schema']['input'], Config['schema']['queries'][Key]['schema']['output']>;
 }
-type UpdateFunctionMap<V extends AnyViewConfig> = {
-    [Key in KeysOfUnion<V['schema']['updates']>]: ViewUpdateFunction<V['schema']['updates'][Key]>;
+export type AnyQueryMap = QueryMap<AnyViewConfig>;
+export type AnyUpdateMap = UpdateMap<AnyViewConfig>;
+export type UpdateMap<Config extends AnyViewConfig> = {
+    [Key in KeysOfUnion<Config['schema']['updates']>]: Update<Key, Config['schema']['updates'][Key]['schema']['input'], Config['schema']['updates'][Key]['schema']['output']>;
 }
 export interface View<Config extends AnyViewConfig, FailureReason extends string> {
     readonly config: Config;
@@ -99,6 +96,16 @@ export interface View<Config extends AnyViewConfig, FailureReason extends string
 
 export type ViewHandlerFunction<V extends AnyViewConfig, FR extends string> =
     (queries: QueryFunctionMap<V>, updates: UpdateFunctionMap<V>) => ComponentHandlerFunction<ViewComponent<V>, FR, false>;
+
+type ViewQueryOrUpdateFunction<In extends z.ZodTypeAny, Out extends z.ZodTypeAny> = (input: z.infer<In>) => Promise<z.infer<Out>>;
+export type ViewQueryFunction<Q extends AnyQuery> = ViewQueryOrUpdateFunction<Q['schema']['input'], Q['schema']['output']>;
+export type ViewUpdateFunction<U extends AnyUpdate> = ViewQueryOrUpdateFunction<U['schema']['input'], U['schema']['output']>; 
+export type QueryFunctionMap<V extends AnyViewConfig> = {
+    [Key in KeysOfUnion<V['schema']['queries']>]: ViewQueryOrUpdateFunction<V['schema']['queries'][Key]['schema']['input'], V['schema']['queries'][Key]['schema']['output']>
+}
+export type UpdateFunctionMap<V extends AnyViewConfig> = {
+    [Key in KeysOfUnion<V['schema']['updates']>]: ViewQueryOrUpdateFunction<V['schema']['updates'][Key]['schema']['input'], V['schema']['updates'][Key]['schema']['output']>
+}
 
 export function createView<Config extends AnyViewConfig, FailureReason extends string>(
     config: Config,

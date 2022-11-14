@@ -1,8 +1,9 @@
-import { createQuery, createUpdate, createView, ViewConfig, ViewHandlerFunction, ViewSchema } from '..';
+import { AnyQueryMap, AnyUpdateMap, createQuery, createUpdate, createView, ViewComponent, ViewConfig, ViewHandlerFunction, ViewSchema } from '..';
 import { z } from 'zod';
 import { generateId } from '../../stream';
 import { generateTraceId } from '../../message';
 import { nextTick } from '../../utils/tests';
+import { ComponentHandlerFunction, InMessage } from '../../component';
 
 const emailSchema = z.string().email();
 const nameSchema = z.string().min(3).max(5);
@@ -32,55 +33,59 @@ describe('View', () => {
         };
 
         const queries = {
-            getUser: createQuery({
-                name: 'getUser',
+            getUser: {
+                _tag: 'Query' as const,
+                name: 'getUser' as const,
                 schema: {
                     input: z.void(),
                     output: userSchema,
                 },
                 execute: async () => user,
-            }),
+            },
         };
         const updates = {
-            setUser: createUpdate({
-                name: 'setUser',
+            setUser: {
+                _tag: 'Update' as const,
+                name: 'setUser' as const,
                 schema: {
                     input: userSchema,
                     output: z.void(),
                 },
-                execute: async (u) => { 
+                execute: async (u) => {
                     user = u;
                 },
-            }),
-        }
-        const schema: ViewSchema<typeof userChannel, typeof queries, any> = {
+            },
+        };
+        const schema  = {
             events: { user: userChannel },
             queries,
             updates,
         }
-        const config: ViewConfig<'user-view', typeof schema> = {
+        const config = {
             name: 'user-view' as const,
             schema,
         }
-        const handler: ViewHandlerFunction<typeof config, string> = (queries, updates) => ({ success }) => async (event) => {
+        type _T = ViewComponent<typeof config>;
+        type _F = ComponentHandlerFunction<_T, string>;
+        type _M = InMessage<_T>;
+        const view = createView(config, (q, u) => ({ success }) => async event => {
             switch (event._tag) {
                 case 'UserCreated': {
-                    await updates.setUser(event.payload);
+                    await u.setUser(event.payload);
                     return success();
                 }
                 case 'UserEmailChanged': {
-                    const current = await queries.getUser();
-                    await updates.setUser({ ...current, email: event.payload });
+                    const current = await q.getUser();
+                    await u.setUser({ ...current, email: event.payload });
                     return success();
                 }
                 case 'UserNameChanged': {
-                    const current = await queries.getUser();
-                    await updates.setUser({ ...current, name: event.payload });
+                    const current = await q.getUser();
+                    await u.setUser({ ...current, name: event.payload });
                     return success();
                 }
             }
-        }
-        const view = createView(config, handler);
+        });
 
         // Act
         const id = generateId();

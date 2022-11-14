@@ -1,6 +1,8 @@
 import { lastValueFrom } from 'rxjs';
-import { ComponentChannelNames, ComponentMessageType, createComponent } from '..';
-import { generateMessageId, generateTraceId, IncomingMessage, Message, MessagePayload } from '../../message';
+import { z } from 'zod';
+import { ComponentChannelSchema, ComponentMessageSchema, ComponentMessageTags, createComponent, InMessage } from '..';
+import { AnyMessageSchema, generateMessageId, generateTraceId, IncomingMessage, Message, MessageSchema, MessageSchemaMap, MessageTag, MessageType } from '../../message';
+import { WrapDefinition } from '../../schema';
 import { generateId } from '../../stream';
 import { createPingPongComponentConfig } from '../../utils/tests';
 
@@ -11,16 +13,40 @@ describe('Component', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
+        type C = typeof config;
+        type _IM = InMessage<C>;
+        type _MS = ComponentMessageSchema<C, 'In', 'ping'>;
+        type _WD = WrapDefinition<_MS>;
+        const z1 = z.object({
+            _tag: z.literal('One'),
+            payload: z.number(),
+        })
+        const z2 = z.object({
+            _tag: z.literal('Two'),
+            payload: z.string(),
+        })
+        type _ZT = typeof z1 | typeof z2;
+        type _ZTT = z.infer<_ZT>;
+        type _MTG = z.infer<_WD>;
+        type _MTT = Message<_MS['_tag'], _MS['schema']>;
+        type _MT = MessageType<ComponentMessageSchema<C, 'In', 'ping'>>;
+        type _CMS = ComponentChannelSchema<C, 'ping', 'In'>['schema'][ComponentMessageTags<C, 'In', 'ping'>];
+        type infer<S extends AnyMessageSchema> = {};
+        type _MST = C['inputChannels']['ping']['schema'][ComponentMessageTags<C, 'In', 'ping'>];
         const component = createComponent(config, (c) => async (msg) => {
             switch (msg._tag) {
                 case 'Ping':
-                    c.send.pong(id).pong();
+                    c.send.pong(id).Pong();
+                    return c.success();
+                case 'PingMultiple':
+                    c.send.pong(id).PongMultiple(msg.payload);
                     return c.success();
             }
         });
 
         // Act
-        component.messages.recv(traceId).ping(id).ping();
+        component.messages.recv(traceId).ping(id).Ping();
+        component.messages.recv(traceId).ping(id).PingMultiple(0);
 
         // Assert
         const inSub = component.inbox.subscribe({
@@ -50,7 +76,10 @@ describe('Component', () => {
         const component = createComponent(config, (c) => async (msg) => {
             switch (msg._tag) {
                 case 'Ping':
-                    c.send.pong(id).pong();
+                    c.send.pong(id).Pong();
+                    return c.success();
+                case 'PingMultiple':
+                    c.send.pong(id).PongMultiple(msg.payload);
                     return c.success();
             }
         });
@@ -60,7 +89,7 @@ describe('Component', () => {
             version: 0,
             streamName: { service: 'my-service', channel: 'ping', id },
             traceId,
-            message: { _tag: 'Ping' },
+            message: { _tag: 'Ping', payload: undefined },
         }
 
         // Act
@@ -96,14 +125,17 @@ describe('Component', () => {
         const component = createComponent(config, (c) => async (msg) => {
             switch (msg._tag) {
                 case 'Ping':
-                    c.send.pong(id).pong();
+                    c.send.pong(id).Pong();
+                    return c.success();
+                case 'PingMultiple':
+                    c.send.pong(id).PongMultiple(msg.payload);
                     return c.success();
             }
         });
 
         // Act
-        const ping = component.messages.create.recv(traceId).ping(id).ping();
-        const pong = component.messages.create.send(traceId).pong(id).pong();
+        const ping = component.messages.create.recv(traceId).ping(id).Ping();
+        const pong = component.messages.create.send(traceId).pong(id).Pong();
 
         // Assert
         const inSub = component.inbox.subscribe({
