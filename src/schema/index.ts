@@ -1,5 +1,5 @@
 import { KeysOfUnion } from "../utils/types";
-import { Schema, z } from 'zod';
+import { TypeOf, z } from 'zod';
 
 export type SchemaType = Zod.ZodTypeAny;
 
@@ -24,8 +24,12 @@ export type SchemaMap<N extends string, S extends AnySchemaDefinition> = {
 export type AnySchemaMap = SchemaMap<string, AnySchemaDefinition>;
 
 export type SchemaMapSchemas<M extends AnySchemaMap> = M['schema'][KeysOfUnion<M['schema']>];
+export type SchemaMapTags<M extends AnySchemaMap> = M['schema'][KeysOfUnion<M['schema']>]['_output']['_tag'];
 export type GetSchemaFromMap<M extends AnySchemaMap, Tag extends SchemaTag<M['schema'][KeysOfUnion<M['schema']>]>> =
     GetSchema<M['schema'][Tag], Tag>;
+
+export type FunctionSchemaType<In extends z.ZodTuple, Out extends SchemaType> = z.ZodFunction<In, Out>;
+export type AsyncFunctionSchemaType<In extends z.ZodTuple, Out extends SchemaType> = z.ZodFunction<In, z.ZodPromise<Out>>;
 
 export const define = <T extends string, S extends SchemaType>(tag: T, schema: S): SchemaDefinition<T, S> =>
     z.object({ _tag: z.literal(tag), schema });

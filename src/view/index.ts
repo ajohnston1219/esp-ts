@@ -1,47 +1,82 @@
 import { AnyChannelSchema, ignoreChannel, IgnoreChannel } from '../stream';
 import { KeysOfUnion } from '../utils/types';
-import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, ComponentType, createComponent } from '../component';
-import { z } from 'zod';
+import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageTypes, ComponentType, createComponent } from '../component';
+import { AnySchemaDefinition, define, GetTaggedObject, SchemaDefinition, SchemaType, TypeOfSchema } from '../schema';
 
-export type ViewResultSuccess<T extends z.ZodTypeAny> = {
-    _tag: 'Success';
-    result: T;
+export type ViewResultSuccess<T extends SchemaType> = {
+    readonly _tag: 'Success';
+    readonly result: T;
 }
 export type ViewResultFailure<FR extends string> = {
-    _tag: 'Failure';
-    reason: FR;
-    message: string;
+    readonly _tag: 'Failure';
+    readonly reason: FR;
+    readonly message: string;
 }
-type QueryOrUpdate<N extends string, In extends z.ZodTypeAny, Out extends z.ZodTypeAny> = {
-    name: N;
-    schema: {
-        input: In,
-        output: Out,
-    };
-    execute: ViewQueryOrUpdateFunction<In, Out>;
+
+type InDef = SchemaDefinition<'input', SchemaType>;
+type OutDef = SchemaDefinition<'output', SchemaType>;
+type QueryOrUpdate<N extends string, In extends InDef, Out extends OutDef> = {
+    readonly _tag: N;
+    readonly input: In;
+    readonly output: Out;
+    readonly execute: ViewQueryOrUpdateFunction<In, Out>;
 }
-type Query<N extends string, In extends z.ZodTypeAny, Out extends z.ZodTypeAny> = QueryOrUpdate<N, In, Out> & { _tag: 'Query' };
-export function createQuery<N extends string, In extends z.ZodTypeAny, Out extends z.ZodTypeAny>(
-    schema: Omit<Query<N, In, Out>, '_tag'>,
-): Query<N, In, Out> {
-    return {
-        _tag: 'Query',
-        ...schema,
-    };
+
+type Query<N extends string, In extends InDef, Out extends OutDef> = QueryOrUpdate<N, In, Out>;
+type Update<N extends string, In extends InDef, Out extends OutDef> = QueryOrUpdate<N, In, Out>;
+export type AnyQuery = Query<string, InDef, OutDef>;
+export type AnyUpdate = Update<string, InDef, OutDef>;
+
+export type QueryMap<Q extends AnyQuery> = {
+    [Tag in Q['_tag']]: GetTaggedObject<Q, Tag>;
 }
-type Update<N extends string, In extends z.ZodTypeAny, Out extends z.ZodTypeAny> = QueryOrUpdate<N, In, Out> & { _tag: 'Update' };
-export function createUpdate<N extends string, In extends z.ZodTypeAny, Out extends z.ZodTypeAny>(
-    schema: Omit<Update<N, In, Out>, '_tag'>,
-): Update<N, In, Out> {
-    return {
-        _tag: 'Update',
-        ...schema,
-    };
+export type UpdateMap<U extends AnyUpdate> = {
+    [Tag in U['_tag']]: GetTaggedObject<U, Tag>;
 }
-type AnyQuery = Query<string, z.ZodTypeAny, z.ZodTypeAny>;
-type AnyUpdate = Update<string, z.ZodTypeAny, z.ZodTypeAny>;
-type QueryKeys<Q extends AnyQuery> = KeysOfUnion<Q['name']>
-type UpdateKeys<U extends AnyUpdate> = KeysOfUnion<U['name']>
+export type AnyQueryMap = QueryMap<AnyQuery>;
+export type AnyUpdateMap = UpdateMap<AnyUpdate>;
+
+interface QUConfig<N extends string, In extends InDef, Out extends OutDef> {
+    readonly name: N;
+    readonly input: In['_output']['schema'];
+    readonly output: Out['_output']['schema'];
+    readonly execute: ViewQueryOrUpdateFunction<In, Out>;
+}
+export const defineQuery = <N extends string, In extends InDef, Out extends OutDef>({
+    name,
+    input,
+    output,
+    execute,
+}: QUConfig<N, In, Out>): Query<N, In, Out> => ({
+    _tag: name,
+    input: define('input', input) as any,
+    output: define('output', output) as any,
+    execute: execute,
+});
+export const defineQueries = <Q extends AnyQuery[]>(
+    ...schemas: Q
+): QueryMap<Q[number]> => schemas.reduce((acc, curr) => ({
+    ...acc,
+    [curr._tag]: curr,
+}), {} as QueryMap<Q[number]>)
+
+export const defineUpdate = <N extends string, In extends InDef, Out extends OutDef>({
+    name,
+    input,
+    output,
+    execute,
+}: QUConfig<N, In, Out>): Update<N, In, Out> => ({
+    _tag: name,
+    input: define('input', input) as any,
+    output: define('output', output) as any,
+    execute: execute,
+});
+export const defineUpdates = <U extends AnyUpdate[]>(
+    ...schemas: U
+): UpdateMap<U[number]> => schemas.reduce((acc, curr) => ({
+    ...acc,
+    [curr._tag]: curr,
+}), {} as UpdateMap<U[number]>)
 
 export interface ViewSchema<
     EventSchema extends AnyChannelSchema,
@@ -49,13 +84,13 @@ export interface ViewSchema<
     UpdateSchema extends AnyUpdate
 > {
     readonly events: {
-        [Key in EventSchema['name']]: EventSchema;
+        [Tag in EventSchema['_tag']]: GetTaggedObject<EventSchema, Tag>;
     };
     readonly queries: {
-        [Key in QuerySchema['name']]: QuerySchema;
+        [Tag in QuerySchema['_tag']]: GetTaggedObject<QuerySchema, Tag>;
     }
     readonly updates: {
-        [Key in UpdateSchema['name']]: UpdateSchema;
+        [Tag in UpdateSchema['_tag']]: GetTaggedObject<UpdateSchema, Tag>;
     }
 }
 export type AnyViewSchema = ViewSchema<AnyChannelSchema, AnyQuery, AnyUpdate>;
@@ -69,7 +104,9 @@ export type AnyViewConfig = ViewConfig<string, AnyViewSchema>;
 export type ChannelKeys<V extends AnyViewSchema> = KeysOfUnion<V['events']>;
 export type EventSchemas<V extends AnyViewSchema, N extends KeysOfUnion<V['events']>> = V['events'][N];
 export type EventSchema<V extends AnyViewSchema, N extends ChannelKeys<V>> = EventSchemas<V, N>;
-export type ViewMessageType<A extends AnyViewConfig> = ComponentMessageType<ViewComponent<A>, 'In'>;
+export type ViewMessageType<A extends AnyViewConfig> = ComponentMessageTypes<ViewComponent<A>, 'In'>;
+export type QueryTags<C extends AnyViewConfig> = KeysOfUnion<C['schema']['queries']>;
+export type UpdateTags<C extends AnyViewConfig> = KeysOfUnion<C['schema']['updates']>;
 
 export type ViewComponent<V extends AnyViewConfig> =
     ComponentConfig<
@@ -79,14 +116,6 @@ export type ViewComponent<V extends AnyViewConfig> =
     >;
 
 
-export type QueryMap<Config extends AnyViewConfig> = {
-    [Key in KeysOfUnion<Config['schema']['queries']>]: Query<Key, Config['schema']['queries'][Key]['schema']['input'], Config['schema']['queries'][Key]['schema']['output']>;
-}
-export type AnyQueryMap = QueryMap<AnyViewConfig>;
-export type AnyUpdateMap = UpdateMap<AnyViewConfig>;
-export type UpdateMap<Config extends AnyViewConfig> = {
-    [Key in KeysOfUnion<Config['schema']['updates']>]: Update<Key, Config['schema']['updates'][Key]['schema']['input'], Config['schema']['updates'][Key]['schema']['output']>;
-}
 export interface View<Config extends AnyViewConfig, FailureReason extends string> {
     readonly config: Config;
     readonly component: Component<ViewComponent<Config>, FailureReason>;
@@ -97,14 +126,23 @@ export interface View<Config extends AnyViewConfig, FailureReason extends string
 export type ViewHandlerFunction<V extends AnyViewConfig, FR extends string> =
     (queries: QueryFunctionMap<V>, updates: UpdateFunctionMap<V>) => ComponentHandlerFunction<ViewComponent<V>, FR, false>;
 
-type ViewQueryOrUpdateFunction<In extends z.ZodTypeAny, Out extends z.ZodTypeAny> = (input: z.infer<In>) => Promise<z.infer<Out>>;
-export type ViewQueryFunction<Q extends AnyQuery> = ViewQueryOrUpdateFunction<Q['schema']['input'], Q['schema']['output']>;
-export type ViewUpdateFunction<U extends AnyUpdate> = ViewQueryOrUpdateFunction<U['schema']['input'], U['schema']['output']>; 
+
+type Param<QU extends AnyQuery | AnyUpdate, IO extends 'input' | 'output'> = TypeOfSchema<QU[IO]>;
+type QueryParam<Q extends AnyQuery, IO extends 'input' | 'output'> = Param<Q, IO>;
+type QueryParams<V extends AnyViewConfig, Tag extends QueryTags<V>, IO extends 'input' | 'output'> =
+    QueryParam<V['schema']['queries'][Tag], IO>;
+type UpdateParam<Q extends AnyQuery, IO extends 'input' | 'output'> = Q[IO];
+type UpdateParams<V extends AnyViewConfig, Tag extends UpdateTags<V>, IO extends 'input' | 'output'> =
+    UpdateParam<V['schema']['updates'][Tag], IO>;
+export type ViewQueryOrUpdateFunction<In extends AnySchemaDefinition, Out extends AnySchemaDefinition> =
+    (input: TypeOfSchema<In>) => Promise<TypeOfSchema<Out>>;
+export type ViewQueryFunction<Q extends AnyQuery> = ViewQueryOrUpdateFunction<Q['input'], Q['output']>;
+export type ViewUpdateFunction<U extends AnyUpdate> = ViewQueryOrUpdateFunction<U['input'], U['output']>;
 export type QueryFunctionMap<V extends AnyViewConfig> = {
-    [Key in KeysOfUnion<V['schema']['queries']>]: ViewQueryOrUpdateFunction<V['schema']['queries'][Key]['schema']['input'], V['schema']['queries'][Key]['schema']['output']>
+    [Tag in KeysOfUnion<V['schema']['queries']>]: ViewQueryFunction<GetTaggedObject<V['schema']['queries'][Tag], Tag>>;
 }
 export type UpdateFunctionMap<V extends AnyViewConfig> = {
-    [Key in KeysOfUnion<V['schema']['updates']>]: ViewQueryOrUpdateFunction<V['schema']['updates'][Key]['schema']['input'], V['schema']['updates'][Key]['schema']['output']>
+    [Tag in KeysOfUnion<V['schema']['updates']>]: ViewUpdateFunction<GetTaggedObject<V['schema']['updates'][Tag], Tag>>;
 }
 
 export function createView<Config extends AnyViewConfig, FailureReason extends string>(
@@ -113,11 +151,11 @@ export function createView<Config extends AnyViewConfig, FailureReason extends s
 ): View<Config, FailureReason> {
 
     const queries: QueryFunctionMap<Config> = Object.keys(config.schema.queries).reduce((acc, key) => {
-        const query = config.schema.queries[key];
+        const query = (config.schema.queries as any)[key] as any;
         return { ...acc, [key]: query.execute };
     }, {} as any);
     const updates: UpdateFunctionMap<Config> = Object.keys(config.schema.updates).reduce((acc, key) => {
-        const update = config.schema.updates[key];
+        const update = (config.schema.updates as any)[key] as any;
         return { ...acc, [key]: update.execute };
     }, {} as any);
 

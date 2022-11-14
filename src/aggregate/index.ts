@@ -2,6 +2,7 @@ import { concatMap, lastValueFrom, Observable, scan } from 'rxjs';
 import { z } from 'zod';
 import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageType, ComponentMessageTypes, ComponentType, createComponent } from '../component';
 import { MessageResult } from '../message';
+import { GetTaggedObject } from '../schema';
 import { AggregateId, AnyChannelSchema } from '../stream';
 import { KeysOfUnion } from '../utils/types';
 
@@ -39,10 +40,10 @@ export type AggregateProjectionFunction<A extends AnyAggregateConfig, FR extends
 export interface AggregateSchema<StateSchema extends Zod.ZodTypeAny, CommandSchema extends AnyChannelSchema, EventSchema extends AnyChannelSchema> {
     readonly state: StateSchema;
     readonly commands: {
-        [Tag in CommandSchema['_tag']]: CommandSchema extends { readonly _tag: Tag } ? CommandSchema : never;
+        [Tag in CommandSchema['_tag']]: GetTaggedObject<CommandSchema, Tag>;
     }
     readonly events: {
-        [Tag in EventSchema['_tag']]: EventSchema extends { readonly _tag: Tag } ? EventSchema : never;
+        [Tag in EventSchema['_tag']]: GetTaggedObject<EventSchema, Tag>;
     }
 }
 export type AnyAggregateSchema = AggregateSchema<Zod.ZodTypeAny, AnyChannelSchema, AnyChannelSchema>;
