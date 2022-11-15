@@ -16,8 +16,10 @@ export type ModelOperation<N extends string, In extends z.ZodTuple, Out extends 
     readonly execute: TypeOf<z.ZodFunction<In, Out>>;
 }
 export type AnyModelOperation = ModelOperation<string, z.ZodTuple, SchemaType>;
-type OperationConfig<N extends string, In extends z.ZodTuple, Out extends SchemaType> = {
-    schema: ModelOperationSchema<N, In, Out>;
+
+type OperationConfig<In extends z.ZodTuple, Out extends SchemaType> = {
+    inputs: In;
+    output: Out;
     execute: TypeOf<z.ZodFunction<In, Out>>;
 }
 
@@ -25,15 +27,18 @@ export const defineFunction = <N extends string, In extends z.ZodTuple, Out exte
     z.object({ _tag: z.literal(name), schema: z.function(inputs, output) });
 
 export const defineOperation = <N extends string, In extends z.ZodTuple, Out extends SchemaType>(name: N, {
-    schema,
+    inputs,
+    output,
     execute,
-}: OperationConfig<N, In, Out>): ModelOperation<N, In, Out> => {
+}: OperationConfig<In, Out>): ModelOperation<N, In, Out> => {
+
     return {
         _tag: name,
-        schema,
+        schema: defineFunction<N, In, Out>(name, inputs, output),
         execute,
     }
 };
+
 export const defineQuery = defineOperation;
 export const defineMutation = defineOperation;
 
@@ -49,7 +54,7 @@ interface ModelConfig<N extends string, Q extends AnyModelOperationSchema, M ext
     query: ModelOperationMap<Q>;
     mutate: ModelOperationMap<M>;
 }
-type AnyModelConfig = ModelConfig<string, AnyModelOperationSchema, AnyModelOperationSchema>;
+
 export type Model<N extends string, Q extends AnyModelOperationSchema, M extends AnyModelOperationSchema> = {
     readonly _tag: N;
     readonly query: {
@@ -59,6 +64,7 @@ export type Model<N extends string, Q extends AnyModelOperationSchema, M extends
         [Tag in SchemaTag<M>]: TypeOfSchema<GetSchema<M, Tag>>;
     }
 }
+export type AnyModel = Model<string, AnyModelOperationSchema, AnyModelOperationSchema>;
 
 export const defineModel = <N extends string, Q extends AnyModelOperationSchema, M extends AnyModelOperationSchema>(name: N, {
     query,

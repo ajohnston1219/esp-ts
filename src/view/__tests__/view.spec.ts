@@ -1,8 +1,8 @@
-import { createView, defineQueries, defineQuery, defineUpdate, defineUpdates } from '..';
+import { createView } from '..';
 import { z } from 'zod';
 import { defineChannel, generateId } from '../../stream';
 import { generateTraceId } from '../../message';
-import { nextTick } from '../../utils/tests';
+import { createUserModel, nextTick } from '../../utils/tests';
 import { define } from '../../schema';
 
 const emailSchema = z.string().email();
@@ -22,51 +22,29 @@ describe('View', () => {
             define('EmailChanged', emailSchema),
         )
 
-        let user: z.infer<typeof userSchema> = {
-            name: '',
-            email: '',
-        };
+        const model = createUserModel();
 
-        const queries = defineQueries(
-            defineQuery({
-                name: 'getUser',
-                input: z.number(),
-                output: userSchema,
-                execute: async () => user,
-            }),
-        );
-        const updates = defineUpdates(
-            defineUpdate({
-                name: 'setUser',
-                input: z.void(),
-                output: z.void(),
-                execute: async () => {},
-            }),
-        )
-        type T = typeof updates.setUser.input;
         const schema  = {
             events: { user: userChannel },
-            queries,
-            updates,
         };
         const config = {
             name: 'user-view' as const,
             schema,
+            model,
         }
-        const view = createView(config, (q, u) => ({ success }) => async event => {
+
+        const view = createView(config, (model) => ({ success }) => async event => {
             switch (event._tag) {
                 case 'Created': {
-                    await u.setUser(event.payload);
+                    await model.mutate.create(event.payload);
                     return success();
                 }
                 case 'EmailChanged': {
-                    const current = await q.getUser();
-                    await u.setUser({ ...current, email: event.payload });
+                    await model.mutate.changeEmail(event.payload)
                     return success();
                 }
                 case 'NameChanged': {
-                    const current = await q.getUser();
-                    await u.setUser({ ...current, name: event.payload });
+                    await model.mutate.changeName(event.payload)
                     return success();
                 }
             }
@@ -81,6 +59,7 @@ describe('View', () => {
         await nextTick();
 
         // Assert
+        const user = await model.query.get();
         expect(user.name).toBe('Bob');
         expect(user.email).toBe('ajohnston@hippomed.us');
     });

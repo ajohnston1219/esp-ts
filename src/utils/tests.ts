@@ -1,9 +1,8 @@
-import { z } from 'zod';
+import { TypeOf, z } from 'zod';
 import { AggregateHandlerFunction, AggregateProjectionFunction, AggregateState, createAggregate, GetAggregateFunction, UpdateAggregateFunction } from '../aggregate';
-import { Message, MessageCreator, MessagePayload, MessageTag, MessageType } from '../message';
-import { define, defineMap } from '../schema';
-import { AggregateId, ChannelMessageCreatorsNoId, ChannelName, ChannelTags, defineChannel } from '../stream';
-import { KeysOfUnion } from './types';
+import { define } from '../schema';
+import { AggregateId, defineChannel } from '../stream';
+import { defineModel, defineMutation, defineMutations, defineQueries, defineQuery } from '../view/model';
 
 export const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 export const nextTick = () => delay(0);
@@ -94,4 +93,44 @@ export function createMathAggregate() {
     }
     const aggregate = createAggregate(config, handler, project, get, update);
     return aggregate;
+}
+
+export function createUserModel() {
+    const userSchema = z.object({
+        name: z.string(),
+        email: z.string().email(),
+    })
+
+    let user: TypeOf<typeof userSchema> = {
+        name: 'Adam',
+        email: 'ajohnston@hippomed.us',
+    }
+
+    const get = defineQuery('get', {
+        inputs: z.tuple([z.void()]),
+        output: z.promise(userSchema),
+        execute: async () => user,
+    })
+    const query = defineQueries(get);
+
+    const create = defineMutation('create', {
+        inputs: z.tuple([userSchema]),
+        output: z.promise(z.void()),
+        execute: async u => { user = u; },
+    })
+    const changeName = defineMutation('changeName', {
+        inputs: z.tuple([z.string()]),
+        output: z.promise(z.void()),
+        execute: async name => { user = { ...user, name } },
+    })
+    const changeEmail = defineMutation('changeEmail', {
+        inputs: z.tuple([z.string().email()]),
+        output: z.promise(z.void()),
+        execute: async email => { user = { ...user, email } },
+    })
+    const mutate = defineMutations(create, changeName, changeEmail);
+
+    const model = defineModel('user', { query, mutate });
+
+    return model;
 }
