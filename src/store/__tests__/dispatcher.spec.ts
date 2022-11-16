@@ -3,7 +3,7 @@ import { generateTraceId, IncomingMessage, Message, OutgoingMessage } from "../.
 import { AggregateId, Channel, generateId, messageInChannel } from "../../stream";
 import { Dispatcher, HandlerFunction } from "../dispatcher";
 import { createComponent } from "../../component";
-import { createPingPongComponentConfig, nextTick } from "../../utils/tests";
+import { getPingPongComponentCreator, nextTick } from "../../utils/tests";
 
 const createChannel = (channel: string) => ({ channel, service: 'my-service' });
 
@@ -158,8 +158,8 @@ describe('Dispatcher', () => {
         // Arrange
         const id = generateId();
         const traceId = generateTraceId();
-        const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async ({ message }) => {
+        const create = getPingPongComponentCreator();
+        const component = create((c) => async ({ message }) => {
             switch (message._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();

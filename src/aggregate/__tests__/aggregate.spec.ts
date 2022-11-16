@@ -1,7 +1,6 @@
-import { map, of } from 'rxjs';
-import { ProjectionSuccess } from '../';
-import { AnyMessage, generateTraceId } from '../../message';
-import { generateId, getStreamName } from '../../stream';
+import { of } from 'rxjs';
+import { generateTraceId } from '../../message';
+import { generateId } from '../../stream';
 import { createMathAggregate, nextTick } from '../../utils/tests';
 
 describe('Aggregate', () => {
@@ -13,13 +12,13 @@ describe('Aggregate', () => {
 
         // Act
         const commands = aggregate.component.messages.recv(traceId)['math:command'](id);
-        const add = commands.Add(5);
+        commands.Add(5);
         commands.Subtract(7);
         commands.Add(4);
         await nextTick();
 
         // Assert
-        const actualState = await aggregate.get(id) as ProjectionSuccess<typeof aggregate.config>;
+        const actualState = await aggregate.get(id) as any;
         expect(actualState.state.total).toBe(2);
     });
 
@@ -35,7 +34,7 @@ describe('Aggregate', () => {
         await aggregate.hydrate(id, event$);
 
         // Assert
-        const actualState = await aggregate.get(id) as ProjectionSuccess<typeof aggregate.config>;
+        const actualState = await aggregate.get(id) as any;
         expect(actualState.state.total).toBe(-1);
     });
 

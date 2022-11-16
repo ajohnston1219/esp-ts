@@ -43,24 +43,25 @@ export type ViewComponent<V extends AnyViewConfig> =
     >;
 
 
-export interface View<Config extends AnyViewConfig, FailureReason extends string> {
+export interface View<Config extends AnyViewConfig, In extends AnyChannelSchema, FailureReason extends string> {
     readonly config: Config;
-    readonly component: Component<ViewComponent<Config>, FailureReason>;
+    readonly component: Component<ComponentConfig<Config['name'], In, AnyChannelSchema>, In, AnyChannelSchema, FailureReason>
     readonly model: Config['model'];
 }
 
-export type ViewHandlerFunction<V extends AnyViewConfig, FR extends string> =
-    (model: V['model']) => ComponentHandlerFunction<ViewComponent<V>, FR, false>;
+export type ViewHandlerFunction<C extends ComponentConfig<string, In, IgnoreChannel>, In extends AnyChannelSchema, M extends AnyModel, FR extends string> =
+    (model: M) => ComponentHandlerFunction<C, In, IgnoreChannel, FR, false>;
 
 
 
-export function createView<Config extends AnyViewConfig, FailureReason extends string>(
-    config: Config,
-    handler: ViewHandlerFunction<Config, FailureReason>,
-): View<Config, FailureReason> {
+export function createView<N extends string, In extends AnyChannelSchema, M extends AnyModel, FailureReason extends string>(
+    config: ViewConfig<N, ViewSchema<In>, M>,
+    handler: ViewHandlerFunction<ComponentConfig<N, In, IgnoreChannel>, In, M, FailureReason>,
+): View<ViewConfig<N, ViewSchema<In>, M>, In, FailureReason> {
 
-    type Comp = ViewComponent<Config>;
-    const component: ComponentType<Comp, FailureReason> = createComponent<Comp, FailureReason, false>({
+    type Out = ReturnType<typeof ignoreChannel>['__IGNORE__'];
+    type Comp = ComponentConfig<N, In, Out>;
+    const component: Component<Comp, In, Out, FailureReason> = createComponent({
         name: config.name,
         inputChannels: config.schema.events as any,
         outputChannels: ignoreChannel(),
@@ -68,7 +69,7 @@ export function createView<Config extends AnyViewConfig, FailureReason extends s
 
     return {
         config,
-        component,
+        component: component as any,
         model: config.model,
     };
 }

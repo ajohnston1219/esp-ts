@@ -1,7 +1,6 @@
 import { InMemoryMessageStoreDB, MessageStore } from '..';
 import { generateId } from '../../stream';
 import { createMathAggregate, nextTick } from '../../utils/tests';
-import { ProjectionSuccess, ProjectionSuccessWithVersion } from '../../aggregate';
 import { generateTraceId } from '../../message';
 
 describe('Message Store Bound Aggregate', () => {
@@ -27,7 +26,7 @@ describe('Message Store Bound Aggregate', () => {
         await nextTick();
 
         // Assert
-        const actualState = await aggregate.get(id) as ProjectionSuccess<typeof aggregate.config>;
+        const actualState = await aggregate.get(id) as any;
         expect(actualState.state.total).toBe(2);
 
     });
@@ -47,7 +46,7 @@ describe('Message Store Bound Aggregate', () => {
         await nextTick();
 
         // Assert
-        const actualState = await messageStore.getAggregate(aggregate)(id) as ProjectionSuccessWithVersion<typeof aggregate.config>;
+        const actualState = await messageStore.getAggregate(aggregate)(id) as any;
         expect(actualState.state.total).toBe(2);
         expect(actualState.version).toBe(3);
     });

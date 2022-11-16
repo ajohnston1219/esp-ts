@@ -1,9 +1,8 @@
 import { concatMap, fromEvent, lastValueFrom, Observable, shareReplay, takeUntil, tap } from "rxjs";
-import { AnyMessage, IncomingMessage, Message, MessageCreatorNoId, MessagePayload, MessageResult, MessageType, TraceId } from "../message";
-import { AggregateId, AnyChannelSchema, getMessageCreatorsNoId, MessageHooks } from "../stream";
+import { AnyMessage, IncomingMessage, Message, MessageCreatorNoId, MessagePayload, MessageResult, MessageType, OutgoingMessage, TraceId } from "../message";
+import { AggregateId, AnyChannelSchema, ChannelMessageSchema, ChannelTags, getMessageCreatorsNoId, MessageHooks } from "../stream";
 import { EventEmitter } from 'node:events';
 import { KeysOfUnion } from "../utils/types";
-import { HandlerMap } from "./handler";
 
 export interface ComponentConfig<Name extends string, InputSchema extends AnyChannelSchema, OutputSchema extends AnyChannelSchema> {
     readonly name: Name;
@@ -15,7 +14,7 @@ export interface ComponentConfig<Name extends string, InputSchema extends AnyCha
     }
 }
 
-export type Component<Config extends AnyComponentConfig, FailureReason extends string> = {
+export type Component<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FailureReason extends string> = {
     readonly config: Config;
     readonly messages: {
         recv: (traceId: TraceId) => {
@@ -34,28 +33,29 @@ export type Component<Config extends AnyComponentConfig, FailureReason extends s
         },
     };
     readonly recvRaw: (message: IncomingMessage<AnyMessage>) => void;
-    readonly handler: ComponentHandlerFunction<Config, FailureReason>;
-    readonly inbox: Observable<MessageResult<InMessage<Config>>>;
-    readonly outbox: Observable<MessageResult<OutMessage<Config>>>;
+    readonly sendRaw: (message: IncomingMessage<AnyMessage>) => void;
+    readonly handler: ComponentHandlerFunction<Config, In, Out, FailureReason>;
+    readonly inbox: Observable<MessageResult<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>>>;
+    readonly outbox: Observable<MessageResult<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>>;
     readonly stop: () => Promise<void>;
 };
 
-export function createComponent<C extends AnyComponentConfig, FR extends string, CanSend extends boolean = true>(
+export function createComponent<N extends string, C extends ComponentConfig<N, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string, CanSend extends boolean = true>(
     config: C,
-    handler: ComponentHandlerFunction<C, FR, CanSend>,
-): Component<C, FR> {
+    handler: ComponentHandlerFunction<C, In, Out, FR, CanSend>,
+): Component<C, In, Out, FR> {
 
-    type InResult = MessageResult<InMessage<C>>;
-    type OutResult = MessageResult<OutMessage<C>>;
+    type InResult = MessageResult<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>>;
+    type OutResult = MessageResult<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>;
 
     const emitter = new EventEmitter({ captureRejections: true });
     const stopper = fromEvent(emitter, 'stop');
 
-    const recv = createComponentChannels<C, 'In', FR>(config, emitter, 'In');
-    const send = createComponentChannels<C, 'Out', FR>(config, emitter, 'Out');
+    const recv = createComponentChannels<C, In, Out, 'In', FR>(config, emitter, 'In');
+    const send = createComponentChannels<C, In, Out, 'Out', FR>(config, emitter, 'Out');
     const create = {
-        recv: createComponentChannels<C, 'In', FR>(config, emitter, 'In', true),
-        send: createComponentChannels<C, 'Out', FR>(config, emitter, 'Out', true),
+        recv: createComponentChannels<C, In, Out, 'In', FR>(config, emitter, 'In', true),
+        send: createComponentChannels<C, In, Out, 'Out', FR>(config, emitter, 'Out', true),
     };
 
     const inbox = fromEvent(emitter, 'in').pipe(
@@ -74,11 +74,18 @@ export function createComponent<C extends AnyComponentConfig, FR extends string,
             message: incoming.message,
         });
     }
+    const sendRaw = (outgoing: OutgoingMessage<AnyMessage>) => {
+        emitter.emit('out', {
+            traceId: outgoing.traceId,
+            streamName: outgoing.streamName,
+            message: outgoing.message,
+        });
+    }
 
     const handleMessage = async (msg: InResult) => {
         await handle(msg);
     }
-    const inSub = inbox.pipe(concatMap(async msg => handleMessage(msg))).subscribe();
+    const inSub = inbox.pipe(concatMap(async msg => await handleMessage(msg))).subscribe();
     const outSub = outbox.subscribe();
 
     const stop = async () => {
@@ -91,29 +98,31 @@ export function createComponent<C extends AnyComponentConfig, FR extends string,
         ]);
     }
 
-    const component: Component<C, FR> = {
+    const component: Component<C, In, Out, FR> = {
         config,
         messages: { recv, send, create },
         recvRaw,
+        sendRaw,
         handler,
         inbox,
         outbox,
         stop,
     }
 
-    const createApi: (t: TraceId) => ComponentAPI<C, FR> = traceId => ({
+    const createApi: (t: TraceId) => ComponentAPI<C, In, Out, FR> = traceId => ({
         send: send(traceId),
+        sendRaw,
         success: () => ({ _tag: 'Success', traceId }),
         failure: (reason, message) => ({ _tag: 'Failure', traceId, reason, message }),
     });
-    const handle = (msg: InResult) => {
-        handler(createApi(msg.traceId))(msg);
+    const handle = async (msg: InResult) => {
+        await handler(createApi(msg.traceId))(msg);
     }
 
     return component;
 }
 
-function createHooks<Config extends AnyComponentConfig, CT extends ChannelType>(
+function createHooks<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, CT extends ChannelType>(
     config: Config,
     emitter: EventEmitter,
     channelType: CT,
@@ -121,20 +130,20 @@ function createHooks<Config extends AnyComponentConfig, CT extends ChannelType>(
     const eventType = channelType === 'In' ? 'in' : 'out';
     const channels = channelType === 'In' ? config.inputChannels : config.outputChannels;
     const hooks = Object.keys(channels).reduce((acc, curr) => {
-        const schema = channels[curr];
-        type MessageType = CT extends 'In' ? InMessage<Config> : OutMessage<Config>;
-        const getMessage = (msg: MessageResult<MessageType>) => channelType === 'In'
+        const schema = (channels as any)[curr].schema;
+        type MT = CT extends 'In' ? MessageType<ChannelMessageSchema<In, ChannelTags<In>>> : MessageType<ChannelMessageSchema<Out, ChannelTags<In>>>;
+        const getMessage = (msg: MessageResult<MT>) => channelType === 'In'
             ? msg
             : { ...msg, channel: schema._tag, service: schema.service };
-        const hook = (msg: MessageResult<MessageType>) => {
+        const hook = (msg: MessageResult<MT>) => {
             emitter.emit(eventType, getMessage(msg));
         }
-        const hooks = Object.keys(channels[curr].schema).reduce((acc, _curr) => {
+        const h = Object.keys(schema).reduce((acc, _curr) => {
             return { ...acc, [_curr]: { after: [ hook ] } };
         }, {} as any);
         const result: any = {
             ...acc,
-            [curr]: hooks,
+            [curr]: h,
         };
         return result;
     }, {} as any);
@@ -142,17 +151,17 @@ function createHooks<Config extends AnyComponentConfig, CT extends ChannelType>(
 }
 
 type ComponentSendOrRecv<Config extends AnyComponentConfig, CT extends ChannelType, FR extends string> =
-    Component<Config, FR>['messages'][CT extends 'In' ? 'recv' : 'send'];
-function createComponentChannels<Config extends AnyComponentConfig, CT extends ChannelType, FR extends string>(
+    Component<Config, AnyChannelSchema, AnyChannelSchema, FR>['messages'][CT extends 'In' ? 'recv' : 'send'];
+function createComponentChannels<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, CT extends ChannelType, FR extends string>(
     config: Config,
     emitter: EventEmitter,
     channelType: CT,
     noHooks?: boolean,
 ): ComponentSendOrRecv<Config, CT, FR> {
     const channels = channelType === 'In' ? config.inputChannels : config.outputChannels;
-    const hooks = noHooks ? undefined : createHooks<Config, CT>(config, emitter, channelType);
+    const hooks = noHooks ? undefined : createHooks<Config, In, Out, CT>(config, emitter, channelType);
     const componentChannels = Object.keys(channels).reduce((acc, curr) => {
-        const channel = channels[curr] as ComponentChannelSchema<Config, ComponentChannelNames<Config, CT>, CT>;
+        const channel = (channels as any)[curr] as ComponentChannelSchema<Config, ComponentChannelNames<Config, CT>, CT>;
         return {
             ...acc,
             [curr]: (traceId: TraceId) => (id: AggregateId) =>
@@ -187,19 +196,20 @@ export type ComponentAPISend<Config extends AnyComponentConfig, FR extends strin
     send: {
         [N in ComponentChannelNames<Config, 'Out'>]: (id: AggregateId) => ComponentMessageCreators<Config, N, 'Out'>;
     },
+    sendRaw: (msg: OutgoingMessage<AnyMessage>) => void;
 } & ComponentAPINoSend<FR>;
-export type ComponentAPI<Config extends AnyComponentConfig, FR extends string, CanSend extends boolean = true> = CanSend extends true
+export type ComponentAPI<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string, CanSend extends boolean = true> = CanSend extends true
     ? ComponentAPISend<Config, FR>
     : ComponentAPINoSend<FR>;
-export type ComponentHandlerFunction<Config extends AnyComponentConfig, FailureReason extends string, CanSend extends boolean = true> =
-    (component: ComponentAPI<Config, FailureReason, CanSend>) =>
-        (msg: MessageResult<InMessage<Config>>) => Promise<ComponentHandlerResult<FailureReason>>;
+export type ComponentHandlerFunction<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FailureReason extends string, CanSend extends boolean = true> =
+    (component: ComponentAPI<Config, In, Out, FailureReason, CanSend>) =>
+        (msg: MessageResult<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>>) => Promise<ComponentHandlerResult<FailureReason>>;
 
 export type ComponentMessageCreators<C extends AnyComponentConfig, N extends ComponentChannelNames<C, CT>, CT extends ChannelType> = {
     [Tag in ComponentTags<ComponentChannelSchema<C, N, CT>>]: MessageCreatorNoId<Message<Tag, MessagePayload<C[ComponentChannelKey<CT>][ComponentChannelNames<C, CT>]['schema'][Tag]>>>;
 }
 export type AnyComponentConfig = ComponentConfig<string, AnyChannelSchema, AnyChannelSchema>;
-export type AnyComponent = Component<AnyComponentConfig, string>;
+export type AnyComponent = Component<AnyComponentConfig, AnyChannelSchema, AnyChannelSchema, string>;
 
 type ChannelType = 'In' | 'Out';
 type ComponentChannelKey<CT extends ChannelType> =
@@ -216,15 +226,13 @@ export type ComponentChannelMessageSchemas<C extends AnyComponentConfig, CT exte
 export type ComponentTags<C extends AnyChannelSchema> = KeysOfUnion<C['schema']>;
 export type ComponentMessageTags<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT>> =
     ComponentTags<ComponentChannelSchema<C, N, CT>>;
-export type ComponentType<C extends AnyComponentConfig, FR extends string> = Component<C, FR>;
+export type ComponentType<C extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string> = Component<C, In, Out, FR>;
 
 export type ComponentMessageSchema<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT>> =
     ComponentChannelSchema<C, N, CT>['schema'][ComponentMessageTags<C, CT, N>];
 export type ComponentMessageSchemas<C extends AnyComponentConfig, CT extends ChannelType> =
     ComponentChannelSchema<C, ComponentChannelNames<C, CT>, CT>;
-export type ComponentMessageType<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT>> =
+export type ComponentMessageType<C extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, CT extends ChannelType, N extends ComponentChannelNames<C, CT>> =
     MessageType<ComponentMessageSchema<C, CT, N>>;
 export type ComponentMessageTypes<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT> = ComponentChannelNames<C, CT>> =
     MessageType<ComponentMessageSchema<C, CT, N>>;
-export type InMessage<C extends AnyComponentConfig> = ComponentMessageType<C, 'In', ComponentChannelNames<C, 'In'>>;
-export type OutMessage<C extends AnyComponentConfig> = ComponentMessageType<C, 'Out', ComponentChannelNames<C, 'Out'>>;

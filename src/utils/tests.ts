@@ -1,5 +1,7 @@
-import { TypeOf, z } from 'zod';
-import { AggregateHandlerFunction, AggregateProjectionFunction, AggregateState, createAggregate, GetAggregateFunction, UpdateAggregateFunction } from '../aggregate';
+import { TypeOf, z } from 'zod'
+import { AggregateCreateConfig, createAggregate } from '../aggregate';
+import { ComponentConfig, ComponentHandlerFunction, createComponent } from '../component';
+import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs } from '../component/handler';
 import { define } from '../schema';
 import { AggregateId, defineChannel } from '../stream';
 import { defineModel, defineMutation, defineMutations, defineQueries, defineQuery } from '../view/model';
@@ -7,7 +9,7 @@ import { defineModel, defineMutation, defineMutations, defineQueries, defineQuer
 export const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 export const nextTick = () => delay(0);
 
-export function createPingPongComponentConfig() {
+export function getPingPongComponentCreator() {
     const pingChannelSchema = defineChannel('my-service', 'ping',
         define('Ping', z.void()),
         define('PingMultiple', z.number().positive()),
@@ -16,7 +18,7 @@ export function createPingPongComponentConfig() {
         define('Pong', z.void()),
         define('PongMultiple', z.number().positive()),
     );
-    const componentConfig = {
+    const componentConfig: ComponentConfig<'my-component', typeof pingChannelSchema, typeof pongChannelSchema> = {
         name: 'my-component' as const,
         inputChannels: {
             'ping': pingChannelSchema,
@@ -25,8 +27,8 @@ export function createPingPongComponentConfig() {
             'pong': pongChannelSchema,
         },
     }
-
-    return componentConfig;
+    return (handler: ComponentHandlerFunction<typeof componentConfig, typeof pingChannelSchema, typeof pongChannelSchema, string, true>) =>
+        createComponent(componentConfig, handler);
 }
 
 export function createMathAggregate() {
@@ -43,8 +45,37 @@ export function createMathAggregate() {
     );
 
     const initialState: z.infer<typeof stateSchema> = { total: 0 };
-    const config = {
-        name: 'math' as const,
+    let state: { [key: AggregateId]: { state: z.infer<typeof stateSchema>, version: number } } = {};
+
+    const tags = {
+        math: {
+            Added: true,
+            Subtracted: false,
+        }
+    }
+    const addHandler = defineHandler<typeof mathCommands, 'Add', typeof mathEvents, typeof tags>({
+        tag: 'Add',
+        input: defineHandlerInput(mathCommands, 'Add'),
+        output: defineHandlerOutputs(
+            defineHandlerOutput('math', mathEvents, 'Added'),
+        ),
+        handle: (api) => async (incoming) => {
+            api.math(incoming.streamName.id).Added(incoming.message.payload);
+        },
+    });
+    const subtractHandler = defineHandler<typeof mathCommands, 'Subtract', typeof mathEvents, typeof tags>({
+        tag: 'Subtract',
+        input: defineHandlerInput(mathCommands, 'Subtract'),
+        output: defineHandlerOutputs(
+            defineHandlerOutput('math', mathEvents, 'Subtracted'),
+        ),
+        handle: (api) => async (incoming) => {
+            api.math(incoming.streamName.id).Subtracted(incoming.message.payload);
+        },
+    });
+
+    const config: AggregateCreateConfig<'math', typeof stateSchema, typeof mathCommands, typeof mathEvents, typeof tags, string> = {
+        name: 'math',
         initialState,
         schema: {
             state: stateSchema,
@@ -54,44 +85,39 @@ export function createMathAggregate() {
             events: {
                 'math': mathEvents,
             },
+        },
+        project: ({ success }) => (state, { message: event }) => {
+            switch (event._tag) {
+                case 'Added':
+                    return success({ ...state, total: state.total + event.payload });
+                case 'Subtracted':
+                    return success({ ...state, total: state.total - event.payload });
+            }
+        },
+        get: ({ success, notFound }) => async (id) => {
+            if (id in state) {
+                return success(state[id].state, state[id].version);
+            }
+            return notFound();
+        },
+        update: ({ success }) => async (id, s, v) => {
+            if (id in state) {
+                state[id] = { state: s, version: v };
+            } else {
+                state = Object.assign({ [id]: { state: s, version: v } }, state);
+            }
+            return success(s);
+        },
+        handlers: {
+            'math:command': {
+                'Add': addHandler,
+                'Subtract': subtractHandler,
+            },
         }
     }
 
-    let state: { [key: AggregateId]: { state: AggregateState<typeof config>, version: number } } = {};
+    const aggregate = createAggregate(config);
 
-    const handler: AggregateHandlerFunction<typeof config, string> = ({ send, success }) => async ({ message: command, streamName: { id } }) => {
-        switch (command._tag) {
-            case 'Add':
-                send.math(id).Added(command.payload);
-                return success();
-            case 'Subtract':
-                send.math(id).Subtracted(command.payload);
-                return success();
-        }
-    }
-    const project: AggregateProjectionFunction<typeof config, string> = ({ success }) => (state, { message: event }) => {
-        switch (event._tag) {
-            case 'Added':
-                return success({ ...state, total: state.total + event.payload });
-            case 'Subtracted':
-                return success({ ...state, total: state.total - event.payload });
-        }
-    }
-    const get: GetAggregateFunction<typeof config, string> = ({ success, notFound }) => async (id) => {
-        if (id in state) {
-            return success(state[id].state, state[id].version);
-        }
-        return notFound();
-    };
-    const update: UpdateAggregateFunction<typeof config, string> = ({ success }) => async (id, s, v) => {
-        if (id in state) {
-            state[id] = { state: s, version: v };
-        } else {
-            state = Object.assign({ [id]: { state: s, version: v } }, state);
-        }
-        return success(s);
-    }
-    const aggregate = createAggregate(config, handler, project, get, update);
     return aggregate;
 }
 

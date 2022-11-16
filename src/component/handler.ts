@@ -44,6 +44,7 @@ export type Handler<In extends AnyChannelSchema, InTag extends ChannelTags<In>, 
     readonly config: HandlerConfig<In, InTag, Out, Tags>;
     readonly execute: HandlerFunction<In, InTag, Out, Tags>;
 }
+export type SomeHandler<In extends AnyChannelSchema, Out extends AnyChannelSchema> = Handler<In, ChannelTags<In>, Out, HandlerTags<Out>>;
 
 export type DefineHandlerConfig<In extends AnyChannelSchema, InTag extends ChannelTags<In>, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> = {
     readonly tag: InTag;
@@ -119,3 +120,18 @@ export type HandlerMap<CN extends ChannelName<In>, In extends AnyChannelSchema, 
         } : never;
     }
 }
+
+export const defineHandlerMap = <CN extends ChannelName<In>, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>>(
+    name: CN,
+    ...handlers: [...Handler<In, ChannelTags<In>, Out, OutTags>[]]
+): HandlerMap<CN, In, Out, OutTags> => ({
+    _tag: name,
+    handlers: handlers.reduce((acc, curr) => {
+        const channel = curr._tag;
+        const messageTag = curr.config.schema.input.tag;
+        if (channel in acc) {
+            return { ...acc, [channel]: { ...(acc as any)[channel], [messageTag]: curr } };
+        }
+        return { ...acc, [channel]: { [messageTag]: curr } };
+    }, {} as any),
+})

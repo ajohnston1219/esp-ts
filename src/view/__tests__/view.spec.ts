@@ -1,4 +1,4 @@
-import { createView } from '..';
+import { createView, ViewConfig, ViewSchema } from '..';
 import { z } from 'zod';
 import { defineChannel, generateId } from '../../stream';
 import { generateTraceId } from '../../message';
@@ -24,10 +24,10 @@ describe('View', () => {
 
         const model = createUserModel();
 
-        const schema  = {
+        const schema: ViewSchema<typeof userChannel>  = {
             events: { user: userChannel },
         };
-        const config = {
+        const config: ViewConfig<'user-view', typeof schema, typeof model> = {
             name: 'user-view' as const,
             schema,
             model,

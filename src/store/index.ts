@@ -1,10 +1,12 @@
-import { AnyMessage, generateMessageId, OutgoingMessage, StoredMessage, TraceId } from '../message';
-import { AggregateId, AnyChannelSchema, channelEquals, streamEquals } from '../stream';
-import { concat, concatMap, distinct, filter, from, fromEvent, lastValueFrom, map, Observable, shareReplay, Subscription, tap } from 'rxjs';
+import { AnyMessage, generateMessageId, MessageType, OutgoingMessage, StoredMessage, TraceId } from '../message';
+import { AggregateId, AnyChannelSchema, channelEquals, ChannelMessageSchema, ChannelTags, streamEquals } from '../stream';
+import { concat, concatMap, distinct, filter, from, fromEvent, map, Observable, shareReplay, Subscription } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
-import { AnyComponent, AnyComponentConfig, Component, ComponentConfig, ComponentMessageType } from '../component';
-import { Aggregate, AggregateComponent, AggregateConfig, AggregateMessageType, AnyAggregate, AnyAggregateConfig, ProjectionResult, ProjectionResultWithVersion } from '../aggregate';
+import { Component, ComponentConfig } from '../component';
+import { Aggregate, AggregateConfig, AggregateMessageType, ProjectionResultWithVersion, SomeAggregateConfig } from '../aggregate';
+import { HandlerTags } from '../component/handler';
+import { SchemaType } from '../schema';
 
 interface LogResult {
     readonly id: AggregateId;
@@ -12,13 +14,13 @@ interface LogResult {
     readonly depth: number;
 }
 
-export type AggregateResult<A extends AnyAggregateConfig, FR extends string> = ProjectionResultWithVersion<A, FR>;
+export type AggregateResult<S extends SchemaType, FR extends string> = ProjectionResultWithVersion<S, FR>;
 
 interface MessageStoreDB {
     logMessage(message: OutgoingMessage<AnyMessage>): Promise<LogResult>;
     getTrace(traceId: TraceId): Promise<StoredMessage<AnyMessage>[]>;
-    getAggregateStream: <A extends AnyAggregateConfig>(config: A) => (id: AggregateId) =>
-        Observable<StoredMessage<AggregateMessageType<A, 'events'>>>;
+    getAggregateStream: <S extends SchemaType, Out extends AnyChannelSchema>(config: AggregateConfig<string, S, AnyChannelSchema, Out, HandlerTags<Out>>) => (id: AggregateId) =>
+        Observable<StoredMessage<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>>
     getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>>;
 }
 
@@ -45,8 +47,10 @@ export class InMemoryMessageStoreDB implements MessageStoreDB {
         return this._log.filter(m => m.traceId === traceId);
     }
 
-    public getAggregateStream<A extends AnyAggregateConfig>(config: A): (id: AggregateId) => Observable<StoredMessage<AggregateMessageType<A, 'events'>>> {
-        type Msg = StoredMessage<AggregateMessageType<A, 'events'>>;
+    public getAggregateStream<S extends SchemaType, Out extends AnyChannelSchema>(
+        config: AggregateConfig<string, S, AnyChannelSchema, Out, HandlerTags<Out>>
+    ): (id: AggregateId) => Observable<StoredMessage<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>> {
+        type Msg = StoredMessage<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>;
         const fn = (id: AggregateId) => {
             const match = (msg: Msg) => {
                 return (
@@ -133,37 +137,37 @@ export class MessageStore implements MessageStore {
         this._subscriptions.push(sub);
     }
 
-    public bindComponent<C extends AnyComponentConfig>(component: Component<C, string>): void {
+    public bindComponent<C extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(component: Component<C, In, Out, string>): void {
         const dispatcher = Dispatcher.fromComponent(component);
         this.bindDispatcher(dispatcher);
         this.bindOutputStream(component.outbox.pipe(
-            map(({ message: msg, traceId, streamName }) => {
-                const payload = (msg as any).payload;
-                const message: OutgoingMessage<AnyMessage> = {
+            map((outgoing) => {
+                const { message, traceId, streamName } = outgoing;
+                const result: OutgoingMessage<AnyMessage> = {
                     traceId, streamName,
-                    message: payload ? {
-                        _tag: msg._tag,
-                        payload,
+                    message: message.payload ? {
+                        _tag: message._tag,
+                        payload: message.payload,
                     } : {
-                        _tag: msg._tag,
+                        _tag: message._tag,
                     } as any,
                 }
-                return message;
+                return result;
             }),
         ));
     }
 
-    public bindAggregate<A extends AnyAggregateConfig>(aggregate: Aggregate<A, string>): void {
+    public bindAggregate<A extends AggregateConfig<string, S, In, Out, OutTags>, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>>(aggregate: Aggregate<A['name'], S, In, Out, OutTags, string>): void {
         this.bindComponent(aggregate.component as any);
     }
 
-    public getAggregate<A extends AnyAggregateConfig, FR extends string>(
-        aggregate: Aggregate<A, FR>
-    ): (id: AggregateId) => Promise<AggregateResult<A, FR>> {
+    public getAggregate<N extends string, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>, FR extends string>(
+        aggregate: Aggregate<N, S, In, Out, OutTags, FR>,
+    ): (id: AggregateId) => Promise<AggregateResult<S, FR>> {
         return async (id: AggregateId) => {
-            const stream = this._db.getAggregateStream(aggregate.config)(id);
-            const result = await aggregate.hydrate(id, stream);
-            return result as AggregateResult<A, FR>;
+            const stream = this._db.getAggregateStream<S, Out>(aggregate.config as any)(id);
+            const result = await aggregate.hydrate(id, stream as any);
+            return result as AggregateResult<S, FR>;
         }
     }
 

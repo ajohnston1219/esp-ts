@@ -2,7 +2,7 @@ import { lastValueFrom } from 'rxjs';
 import { createComponent } from '..';
 import { generateMessageId, generateTraceId, IncomingMessage, Message } from '../../message';
 import { generateId } from '../../stream';
-import { createPingPongComponentConfig } from '../../utils/tests';
+import { getPingPongComponentCreator } from '../../utils/tests';
 
 describe('Component', () => {
 
@@ -10,8 +10,8 @@ describe('Component', () => {
         // Arrange
         const id = generateId();
         const traceId = generateTraceId();
-        const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async ({ message: msg }) => {
+        const create = getPingPongComponentCreator();
+        const component = create((c) => async ({ message: msg }) => {
             switch (msg._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
@@ -49,8 +49,8 @@ describe('Component', () => {
         // Arrange
         const id = generateId();
         const traceId = generateTraceId();
-        const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async ({ traceId, message, streamName: { id } }) => {
+        const create = getPingPongComponentCreator();
+        const component = create((c) => async ({ message, streamName: { id } }) => {
             switch (message._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
@@ -98,8 +98,8 @@ describe('Component', () => {
         // Arrange
         const id = generateId();
         const traceId = generateTraceId();
-        const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async ({ message: msg }) => {
+        const create = getPingPongComponentCreator();
+        const component = create((c) => async ({ message: msg }) => {
             switch (msg._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();

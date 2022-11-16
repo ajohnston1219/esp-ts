@@ -1,6 +1,7 @@
-import { AnyComponentConfig, Component, ComponentChannelNames, ComponentMessageType } from "../component";
-import { AnyMessage, IncomingMessage, StoredMessage } from "../message";
-import { Channel, channelEquals } from "../stream";
+import { AnyComponentConfig, Component, ComponentChannelNames, ComponentConfig, ComponentMessageType } from "../component";
+import { AnyMessage, IncomingMessage, MessageType, StoredMessage } from "../message";
+import { AnyChannelSchema, Channel, channelEquals, ChannelMessageSchema, ChannelTags } from "../stream";
+import { KeysOfUnion } from "../utils/types";
 
 export type HandlerFunction<M extends AnyMessage> = (message: IncomingMessage<M>) => Promise<void>;
 
@@ -22,8 +23,8 @@ export class Dispatcher<M extends AnyMessage> {
         return new Dispatcher(channels.map(channel => ({ channel, offset: 0 })), handler);
     }
 
-    public static fromComponent<C extends AnyComponentConfig, FR extends string>(component: Component<C, FR>): Dispatcher<ComponentMessageType<C, 'In', ComponentChannelNames<C, 'In'>>> {
-        const handler: HandlerFunction<ComponentMessageType<C, 'In', ComponentChannelNames<C, 'In'>>> = async (message) => {
+    public static fromComponent<N extends string, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string>(component: Component<ComponentConfig<N, In, Out>, In, Out, FR>): Dispatcher<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>> {
+        const handler: HandlerFunction<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>> = async (message) => {
             component.recvRaw(message);
         }
         const subscriptions: DispatcherSubscription[] = Object.keys(component.config.inputChannels).map(key => {

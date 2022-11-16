@@ -2,7 +2,7 @@ import { InMemoryMessageStoreDB, MessageStore } from '..';
 import { createComponent } from '../../component';
 import { generateTraceId } from '../../message';
 import { generateId } from '../../stream';
-import { createPingPongComponentConfig, delay, nextTick } from '../../utils/tests';
+import { getPingPongComponentCreator, delay, nextTick } from '../../utils/tests';
 
 describe('Message Store Bound Components', () => {
 
@@ -16,8 +16,10 @@ describe('Message Store Bound Components', () => {
         // Arrange
         const id = generateId();
         const traceId = generateTraceId();
-        const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async ({ message: msg, streamName: { id } }) => {
+        const create = getPingPongComponentCreator();
+
+        // TODO(adam): Fix type inference here
+        const component = create((c) => async ({ message: msg, streamName: { id } }) => {
             switch (msg._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
