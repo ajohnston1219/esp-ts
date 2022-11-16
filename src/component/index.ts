@@ -3,6 +3,7 @@ import { AnyMessage, IncomingMessage, Message, MessageCreatorNoId, MessagePayloa
 import { AggregateId, AnyChannelSchema, getMessageCreatorsNoId, MessageHooks } from "../stream";
 import { EventEmitter } from 'node:events';
 import { KeysOfUnion } from "../utils/types";
+import { HandlerMap } from "./handler";
 
 export interface ComponentConfig<Name extends string, InputSchema extends AnyChannelSchema, OutputSchema extends AnyChannelSchema> {
     readonly name: Name;

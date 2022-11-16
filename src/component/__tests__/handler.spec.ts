@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { AnyMessage, Envelope, generateTraceId, MessageResult, MessageType } from '../../message';
+import { generateTraceId, MessageResult, MessageType } from '../../message';
 import { define } from '../../schema';
 import { ChannelMessageType, ChannelTags, defineChannel, generateId, getStreamName } from '../../stream';
-import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs, getHandlerApi } from '../handler';
+import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs, getHandlerApi, HandlerTags } from '../handler';
 
 describe('Handler', () => {
 
@@ -25,10 +25,11 @@ describe('Handler', () => {
         )
 
         const handler = defineHandler({
+            tag: 'In_1',
             input: defineHandlerInput(inSchema, 'In_1'),
             output: defineHandlerOutputs(
-                defineHandlerOutput(outSchema, ['Out_1', 'Out_2']),
-                defineHandlerOutput(outSchema_2, ['Out_21']),
+                defineHandlerOutput('out', outSchema, 'Out_1', 'Out_2'),
+                defineHandlerOutput('out_2', outSchema_2, 'Out_21'),
             ),
             handle: (api) => async ({ message, streamName }) => {
                 api.out(streamName.id).Out_1(message.payload);

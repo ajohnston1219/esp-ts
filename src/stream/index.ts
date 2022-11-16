@@ -67,18 +67,18 @@ export type ChannelName<Schema extends AnyChannelSchema> = Schema['_tag'];
 export type ChannelTags<Schema extends AnyChannelSchema> = KeysOfUnion<Schema['schema']>;
 export type ChannelMessageType<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> = Message<Tag, MessagePayload<Schema['schema'][Tag]>>;
 export type ChannelMessageSchema<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> = Schema['schema'][Tag];
-export type ChannelMessageCreators<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageCreator<ChannelMessageType<Schema, Tag>>;
+export type ChannelMessageCreators<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
+    [Tag in Tags]: MessageCreator<ChannelMessageType<Schema, Tag>>;
 }
-export type ChannelMessageCreatorsNoTraceId<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageCreatorNoTraceId<ChannelMessageType<Schema, Tag>>;
+export type ChannelMessageCreatorsNoTraceId<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
+    [Tag in Tags]: MessageCreatorNoTraceId<ChannelMessageType<Schema, Tag>>;
 }
-export type ChannelMessageCreatorsNoId<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageCreatorNoId<ChannelMessageType<Schema, Tag>>;
+export type ChannelMessageCreatorsNoId<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
+    [Tag in Tags]: MessageCreatorNoId<ChannelMessageType<Schema, Tag>>;
 }
 
-export type MessageHooks<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageHook<ChannelMessageType<Schema, Tag>>;
+export type MessageHooks<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
+    [Tag in Tags]: MessageHook<ChannelMessageType<Schema, Tag>>;
 }
 
 export const getStreamName = <Schema extends AnyChannelSchema>(schema: Schema) => (id: string) => ({
