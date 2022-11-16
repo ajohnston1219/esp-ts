@@ -1,8 +1,7 @@
 import { AggregateId, StreamName } from '../stream';
 import * as uuid from 'uuid';
 import { z } from 'zod';
-import { SchemaDefinition, SchemaMap, SchemaTag, SchemaType, TypeOfDefinition, TypeOfSchema } from '../schema';
-import { RenameObject } from '../utils/types';
+import { SchemaDefinition, SchemaMap, SchemaTag, SchemaType, TypeOfSchema } from '../schema';
 
 export type Message<Tag extends string, Payload> = { readonly _tag: Tag, payload: Payload }
 export type AnyMessage = Message<string, any>;
@@ -45,7 +44,8 @@ export type MessageResult<M extends AnyMessage> = { aggregateId: AggregateId, tr
 export type MessageCreatorNoId<M extends AnyMessage> = M['payload'] extends undefined | void
     ? () => MessageResult<M>
     : (payload: M['payload']) => MessageResult<M>;
-export type MessageCreator<M extends AnyMessage> = (traceId: TraceId) => (id: AggregateId) => MessageCreatorNoId<M>;
+export type MessageCreatorNoTraceId<M extends AnyMessage> = (id: AggregateId) => MessageCreatorNoId<M>;
+export type MessageCreator<M extends AnyMessage> = (traceId: TraceId) => MessageCreatorNoTraceId<M>;
 
 function createMessage<Schema extends AnyMessageSchema>(
     traceId: TraceId,

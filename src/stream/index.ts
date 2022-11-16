@@ -1,4 +1,4 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageCreatorNoId, MessageHook, MessagePayload, MessageSchema, MessageSchemaMap, MessageTag, NoMessageSchema, TraceId } from '../message';
+import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageCreatorNoId, MessageCreatorNoTraceId, MessageHook, MessagePayload, MessageSchema, MessageSchemaMap, MessageTag, NoMessageSchema, TraceId } from '../message';
 import { z } from 'zod';
 import * as uuid from 'uuid';
 import { KeysOfUnion } from '../utils/types';
@@ -65,15 +65,20 @@ export const ignoreChannel = (): { '__IGNORE__': IgnoreChannel } => ({
 
 export type ChannelName<Schema extends AnyChannelSchema> = Schema['_tag'];
 export type ChannelTags<Schema extends AnyChannelSchema> = KeysOfUnion<Schema['schema']>;
+export type ChannelMessageType<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> = Message<Tag, MessagePayload<Schema['schema'][Tag]>>;
+export type ChannelMessageSchema<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> = Schema['schema'][Tag];
 export type ChannelMessageCreators<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageCreator<Message<Tag, MessagePayload<Schema['schema'][Tag]>>>;
+    [Tag in ChannelTags<Schema>]: MessageCreator<ChannelMessageType<Schema, Tag>>;
+}
+export type ChannelMessageCreatorsNoTraceId<Schema extends AnyChannelSchema> = {
+    [Tag in ChannelTags<Schema>]: MessageCreatorNoTraceId<ChannelMessageType<Schema, Tag>>;
 }
 export type ChannelMessageCreatorsNoId<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageCreatorNoId<Message<Tag, MessagePayload<Schema['schema'][Tag]>>>;
+    [Tag in ChannelTags<Schema>]: MessageCreatorNoId<ChannelMessageType<Schema, Tag>>;
 }
 
 export type MessageHooks<Schema extends AnyChannelSchema> = {
-    [Tag in ChannelTags<Schema>]: MessageHook<Message<Tag, MessagePayload<Schema['schema'][Tag]>>>;
+    [Tag in ChannelTags<Schema>]: MessageHook<ChannelMessageType<Schema, Tag>>;
 }
 
 export const getStreamName = <Schema extends AnyChannelSchema>(schema: Schema) => (id: string) => ({
