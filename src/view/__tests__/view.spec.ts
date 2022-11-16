@@ -33,7 +33,7 @@ describe('View', () => {
             model,
         }
 
-        const view = createView(config, (model) => ({ success }) => async event => {
+        const view = createView(config, (model) => ({ success }) => async ({ message: event }) => {
             switch (event._tag) {
                 case 'Created': {
                     await model.mutate.create(event.payload);

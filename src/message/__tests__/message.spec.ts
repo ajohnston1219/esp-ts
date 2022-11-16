@@ -23,8 +23,8 @@ describe('Message', () => {
 
         // Assert
         expect(event.traceId).toBe(traceId);
-        expect(event.aggregateId).toBe(id);
-        expect(event._tag).toBe('Add');
-        expect(event.payload.amount).toBe(amount);
+        expect(event.streamName.id).toBe(id);
+        expect(event.message._tag).toBe('Add');
+        expect(event.message.payload.amount).toBe(amount);
     });
 });

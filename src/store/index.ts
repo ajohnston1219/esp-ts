@@ -137,11 +137,10 @@ export class MessageStore implements MessageStore {
         const dispatcher = Dispatcher.fromComponent(component);
         this.bindDispatcher(dispatcher);
         this.bindOutputStream(component.outbox.pipe(
-            map(msg => {
+            map(({ message: msg, traceId, streamName }) => {
                 const payload = (msg as any).payload;
                 const message: OutgoingMessage<AnyMessage> = {
-                    traceId: msg.traceId,
-                    streamName: msg.streamName,
+                    traceId, streamName,
                     message: payload ? {
                         _tag: msg._tag,
                         payload,
@@ -162,9 +161,7 @@ export class MessageStore implements MessageStore {
         aggregate: Aggregate<A, FR>
     ): (id: AggregateId) => Promise<AggregateResult<A, FR>> {
         return async (id: AggregateId) => {
-            const stream = this._db.getAggregateStream(aggregate.config)(id).pipe(
-                map(msg => ({ ...msg.message })),
-            );
+            const stream = this._db.getAggregateStream(aggregate.config)(id);
             const result = await aggregate.hydrate(id, stream);
             return result as AggregateResult<A, FR>;
         }

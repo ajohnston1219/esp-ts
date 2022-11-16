@@ -1,5 +1,5 @@
 import { KeysOfUnion } from "../utils/types";
-import { TypeOf, z } from 'zod';
+import { z } from 'zod';
 
 export type SchemaType = Zod.ZodTypeAny;
 

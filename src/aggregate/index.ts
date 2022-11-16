@@ -35,7 +35,7 @@ export type ProjectionFetchAPI<A extends AnyAggregateConfig, FR extends string> 
     readonly notFound: () => ProjectionNotFound;
 }
 export type AggregateProjectionFunction<A extends AnyAggregateConfig, FR extends string> =
-    (api: ProjectionAPI<A, FR>) => (state: AggregateState<A>, event: ComponentMessageTypes<AggregateComponent<A>, 'Out'>) => ProjectionResult<A, FR>;
+    (api: ProjectionAPI<A, FR>) => (state: AggregateState<A>, event: MessageResult<ComponentMessageTypes<AggregateComponent<A>, 'Out'>>) => ProjectionResult<A, FR>;
 
 export interface AggregateSchema<StateSchema extends Zod.ZodTypeAny, CommandSchema extends AnyChannelSchema, EventSchema extends AnyChannelSchema> {
     readonly state: StateSchema;
@@ -74,7 +74,7 @@ export type AggregateComponent<A extends AnyAggregateConfig> =
     >;
 
 export type HydrateFunction<A extends AnyAggregateConfig, FR extends string> =
-    (id: AggregateId, event$: Observable<AggregateMessageType<A, 'events'>>) => Promise<ProjectionResultWithVersion<A, FR>>;
+    (id: AggregateId, event$: Observable<MessageResult<AggregateMessageType<A, 'events'>>>) => Promise<ProjectionResultWithVersion<A, FR>>;
 export interface Aggregate<Config extends AnyAggregateConfig, FailureReason extends string> {
     readonly config: Config;
     readonly component: Component<AggregateComponent<Config>, FailureReason>;
@@ -118,23 +118,23 @@ export function createAggregate<Config extends AnyAggregateConfig, FailureReason
         outputChannels: config.schema.events as any,
     }, handler);
 
-    const doProject = async (event: MessageResult<any>) => {
-        const getResult = await get(fetchApi)(event.aggregateId);
+    const doProject = async (message: MessageResult<any>) => {
+        const getResult = await get(fetchApi)(message.streamName.id);
         if (getResult._tag === 'Failure') {
-            return { ...getResult, traceId: event.traceId };
+            return { ...getResult, traceId: message.traceId };
         }
         let result: ProjectionResult<Config, FailureReason>;
         const version = getResult._tag === 'NotFound' ? 0 : getResult.version;
         if (getResult._tag === 'NotFound') {
-            result = project(api)(config.initialState, event);
+            result = project(api)(config.initialState, message);
         } else {
-            result = project(api)(getResult.state, event);
+            result = project(api)(getResult.state, message);
         }
         if (result._tag === 'Failure') {
-            return { ...result, traceId: event.traceId };
+            return { ...result, traceId: message.traceId };
         }
-        const updateResult = await update(api)(event.aggregateId, result.state, version + 1);
-        return { ...updateResult, traceId: event.traceId };
+        const updateResult = await update(api)(message.streamName.id, result.state, version + 1);
+        return { ...updateResult, traceId: message.traceId };
     }
 
     const hydrate: HydrateFunction<Config, FailureReason> = async (id, event$) => {

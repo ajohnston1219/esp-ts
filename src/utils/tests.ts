@@ -59,17 +59,17 @@ export function createMathAggregate() {
 
     let state: { [key: AggregateId]: { state: AggregateState<typeof config>, version: number } } = {};
 
-    const handler: AggregateHandlerFunction<typeof config, string> = ({ send, success }) => async (command) => {
+    const handler: AggregateHandlerFunction<typeof config, string> = ({ send, success }) => async ({ message: command, streamName: { id } }) => {
         switch (command._tag) {
             case 'Add':
-                send.math(command.aggregateId).Added(command.payload);
+                send.math(id).Added(command.payload);
                 return success();
             case 'Subtract':
-                send.math(command.aggregateId).Subtracted(command.payload);
+                send.math(id).Subtracted(command.payload);
                 return success();
         }
     }
-    const project: AggregateProjectionFunction<typeof config, string> = ({ success }) => (state, event) => {
+    const project: AggregateProjectionFunction<typeof config, string> = ({ success }) => (state, { message: event }) => {
         switch (event._tag) {
             case 'Added':
                 return success({ ...state, total: state.total + event.payload });

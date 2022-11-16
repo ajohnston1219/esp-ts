@@ -1,4 +1,4 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageCreatorNoId, MessageCreatorNoTraceId, MessageHook, MessagePayload, MessageSchema, MessageSchemaMap, MessageTag, NoMessageSchema, TraceId } from '../message';
+import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageCreatorNoId, MessageCreatorNoTraceId, MessageHook, MessagePayload, NoMessageSchema, TraceId } from '../message';
 import { z } from 'zod';
 import * as uuid from 'uuid';
 import { KeysOfUnion } from '../utils/types';
@@ -90,12 +90,12 @@ export function getMessageCreators<Schema extends AnyChannelSchema>(
     schema: Schema,
     hooks?: MessageHooks<Schema>,
 ): ChannelMessageCreators<Schema> {
-    const getHooks = (schemaName: ChannelTags<Schema>) => {
+    const getHooks: any = (schemaName: ChannelTags<Schema>) => {
         return hooks ? hooks[schemaName] : undefined;
     };
-    const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
+    const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr: any) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schema[curr].shape._tag.value as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr as any)),
+        [curr]: getMessageCreator(schema.schema[curr].shape._tag.value as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr) as any),
     }) as any, {} as any);
     return creators;
 }
@@ -105,12 +105,12 @@ export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
     schema: Schema,
     hooks?: MessageHooks<Schema>,
 ): ChannelMessageCreators<Schema> {
-    const getHooks = (schemaName: ChannelTags<Schema>) => {
+    const getHooks: any = (schemaName: ChannelTags<Schema>) => {
         return hooks ? hooks[schemaName] : undefined;
     };
-    const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr) => ({
+    const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr: any) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schema[curr].shape._tag.value as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr as any))(traceId)(id),
+        [curr]: getMessageCreator(schema.schema[curr].shape._tag.value as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr))(traceId)(id),
     }) as any, {} as any);
     return creators;
 }

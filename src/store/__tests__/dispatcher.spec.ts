@@ -159,13 +159,13 @@ describe('Dispatcher', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async (msg) => {
-            switch (msg._tag) {
+        const component = createComponent(config, (c) => async ({ message }) => {
+            switch (message._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
                     return c.success();
                 case 'PingMultiple':
-                    c.send.pong(id).PongMultiple(msg.payload);
+                    c.send.pong(id).PongMultiple(message.payload);
                     return c.success();
             }
         });
@@ -182,17 +182,17 @@ describe('Dispatcher', () => {
 
         // Assert
         const inSub = component.inbox.subscribe({
-            next: (msg) => {
-                expect(msg.traceId).toBe(traceId);
-                expect(msg.aggregateId).toBe(id);
-                expect(msg._tag).toBe('Ping');
+            next: ({ traceId, streamName, message }) => {
+                expect(traceId).toBe(traceId);
+                expect(streamName.id).toBe(id);
+                expect(message._tag).toBe('Ping');
             }
         });
         const outSub = component.outbox.subscribe({
-            next: (msg) => {
-                expect(msg.traceId).toBe(traceId);
-                expect(msg.aggregateId).toBe(id);
-                expect(msg._tag).toBe('Pong');
+            next: ({ traceId, streamName, message }) => {
+                expect(traceId).toBe(traceId);
+                expect(streamName.id).toBe(id);
+                expect(message._tag).toBe('Pong');
             }
         });
         inSub.unsubscribe();

@@ -1,4 +1,4 @@
-import { concatMap, fromEvent, lastValueFrom, Observable, shareReplay, takeUntil } from "rxjs";
+import { concatMap, fromEvent, lastValueFrom, Observable, shareReplay, takeUntil, tap } from "rxjs";
 import { AnyMessage, IncomingMessage, Message, MessageCreatorNoId, MessagePayload, MessageResult, MessageType, TraceId } from "../message";
 import { AggregateId, AnyChannelSchema, getMessageCreatorsNoId, MessageHooks } from "../stream";
 import { EventEmitter } from 'node:events';
@@ -69,8 +69,8 @@ export function createComponent<C extends AnyComponentConfig, FR extends string,
     const recvRaw = (incoming: IncomingMessage<AnyMessage>) => {
         emitter.emit('in', {
             traceId: incoming.traceId,
-            aggregateId: incoming.streamName.id,
-            ...incoming.message,
+            streamName: incoming.streamName,
+            message: incoming.message,
         });
     }
 
@@ -226,6 +226,4 @@ export type ComponentMessageType<C extends AnyComponentConfig, CT extends Channe
 export type ComponentMessageTypes<C extends AnyComponentConfig, CT extends ChannelType, N extends ComponentChannelNames<C, CT> = ComponentChannelNames<C, CT>> =
     MessageType<ComponentMessageSchema<C, CT, N>>;
 export type InMessage<C extends AnyComponentConfig> = ComponentMessageType<C, 'In', ComponentChannelNames<C, 'In'>>;
-export type OutMessage<C extends AnyComponentConfig> =
-    ComponentMessageType<C, 'Out', ComponentChannelNames<C, 'Out'>>
-    & { channel: ComponentChannelNames<C, 'Out'>, service: ComponentServiceNames<C, 'Out'> };
+export type OutMessage<C extends AnyComponentConfig> = ComponentMessageType<C, 'Out', ComponentChannelNames<C, 'Out'>>;

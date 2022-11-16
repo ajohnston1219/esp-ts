@@ -17,13 +17,13 @@ describe('Message Store Bound Components', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async (msg) => {
+        const component = createComponent(config, (c) => async ({ message: msg, streamName: { id } }) => {
             switch (msg._tag) {
                 case 'Ping':
-                    c.send.pong(msg.aggregateId).Pong();
+                    c.send.pong(id).Pong();
                     return c.success();
                 case 'PingMultiple':
-                    c.send.pong(msg.aggregateId).PongMultiple(msg.payload);
+                    c.send.pong(id).PongMultiple(msg.payload);
                     return c.success();
             }
         });

@@ -1,27 +1,26 @@
-import { AnyMessageSchema, getMessageCreator, MessageHookFunction, MessageTag, MessageType, TraceId } from "../message";
-import { GetTaggedObject } from "../schema";
+import { AnyMessageSchema, getMessageCreator, MessageHookFunction, MessageResult, MessageTag, MessageType, TraceId } from "../message";
 import { AggregateId, AnyChannelSchema, ChannelMessageCreatorsNoId, ChannelMessageSchema, ChannelMessageType, ChannelTags, getMessageCreatorsNoId, getStreamName } from "../stream";
 
 type HandlerTags<C extends AnyChannelSchema> = [...ChannelTags<C>[]];
-type Output<C extends AnyChannelSchema, Tags extends HandlerTags<C>> = {
+type HandlerChannel<C extends AnyChannelSchema, Tags extends HandlerTags<C>> = {
     channel: C;
     tags: Tags;
 }
-type OutputSchema<C extends AnyChannelSchema, Tags extends HandlerTags<C>> = {
-    [Tag in C['_tag']]: C extends { readonly _tag: Tag } ? Output<C, Tags> : never;
+export type HandlerChannelSchema<C extends AnyChannelSchema, Tags extends HandlerTags<C>> = {
+    [Tag in C['_tag']]: C extends { readonly _tag: Tag } ? HandlerChannel<C, Tags> : never;
 }
 
 export type HandlerSchema<In extends AnyMessageSchema, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> = {
     readonly _tag: MessageTag<In>;
     readonly input: In;
-    readonly output: OutputSchema<Out, Tags>;
+    readonly output: HandlerChannelSchema<Out, Tags>;
 }
 
 export type HandlerAPI<O extends AnyChannelSchema, Tags extends ChannelTags<O>> = {
     [Key in O['_tag']]: (id: AggregateId) => Pick<ChannelMessageCreatorsNoId<O>, Tags>;
 }
 export type HandlerFunction<In extends AnyMessageSchema, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> =
-    (api: HandlerAPI<Out, Tags[number]>) => (message: MessageType<In>) => Promise<void>;
+    (api: HandlerAPI<Out, Tags[number]>) => (message: MessageResult<MessageType<In>>) => Promise<void>;
 
 export type HandlerConfig<In extends AnyMessageSchema, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> = {
     readonly _tag: MessageTag<In>;
@@ -37,7 +36,7 @@ export type Handler<In extends AnyMessageSchema, Out extends AnyChannelSchema, T
 
 export type DefineHandlerConfig<In extends AnyMessageSchema, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> = {
     readonly input: In;
-    readonly output: OutputSchema<Out, Tags>;
+    readonly output: HandlerChannelSchema<Out, Tags>;
     readonly handle: HandlerFunction<In, Out, Tags>;
 }
 export const defineHandler = <In extends AnyMessageSchema, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>>({
@@ -60,33 +59,36 @@ export const defineHandlerInput = <C extends AnyChannelSchema, Tag extends Chann
     tag: Tag,
 ): ChannelMessageSchema<C, Tag> => channel.schema[tag] as unknown as ChannelMessageSchema<C, Tag>;
 
-export const defineHandlerOutput = <C extends AnyChannelSchema, Tags extends HandlerTags<C>>(
+export const defineHandlerChannel = <C extends AnyChannelSchema, Tags extends HandlerTags<C>>(
     channel: C,
     tags: Tags,
-): Output<C, Tags> => ({
+): HandlerChannel<C, Tags> => ({
     channel,
     tags,
 });
+export const defineHandlerOutput = defineHandlerChannel;
 
-export const defineHandlerOutputs = <O extends Output<AnyChannelSchema, HandlerTags<AnyChannelSchema>>[]>(
-    ...outputs: O
-): OutputSchema<O[number]['channel'], HandlerTags<O[number]['channel']>> => outputs.reduce((acc, { channel, tags }) => ({
+export const defineHandlerChannels = <C extends HandlerChannel<AnyChannelSchema, HandlerTags<AnyChannelSchema>>[]>(
+    ...channels: C
+): HandlerChannelSchema<C[number]['channel'], HandlerTags<C[number]['channel']>> => channels.reduce((acc, { channel, tags }) => ({
     ...acc,
     [channel._tag]: { channel, tags },
 }), {} as any);
 
+export const defineHandlerOutputs = defineHandlerChannels;
+
 export function getHandlerApi<C extends AnyChannelSchema, Tags extends HandlerTags<C>>(
     traceId: TraceId,
-    schema: OutputSchema<C, Tags>,
+    schema: HandlerChannelSchema<C, Tags>,
     after?: MessageHookFunction<ChannelMessageType<C, Tags[number]>>,
 ): HandlerAPI<C, Tags[number]> {
     const creators = Object.keys(schema).reduce<HandlerAPI<C, Tags[number]>>((acc, key) => {
-        const hooks = after ? { after: [after] } : {};
-        const curr = (schema as any)[key] as unknown as Output<C, Tags>;
+        const hooks = after ? { after: [after] } : undefined;
+        const curr = (schema as any)[key] as unknown as HandlerChannel<C, Tags>;
         return {
             ...acc,
             [curr.channel._tag]: (id: AggregateId) =>
-                curr.tags.reduce((a: any, c: any) => ({ ...a, [c]: getMessageCreator(c, getStreamName(curr.channel), hooks)(traceId)(id) }), {} as any),
+                curr.tags.reduce((a: any, c: any) => ({ ...a, [c]: getMessageCreator(c, getStreamName(curr.channel), hooks as any)(traceId)(id) }), {} as any),
         }
     }, {} as unknown as HandlerAPI<C, Tags[number]>);
     return creators;

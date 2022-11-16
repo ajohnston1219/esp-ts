@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { AnyMessage, generateTraceId, MessageType, TraceId } from '../../message';
+import { AnyMessage, Envelope, generateTraceId, MessageResult, MessageType } from '../../message';
 import { define } from '../../schema';
-import { defineChannel, generateId } from '../../stream';
-import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs, getHandlerApi, HandlerAPI } from '../handler';
+import { ChannelMessageType, ChannelTags, defineChannel, generateId, getStreamName } from '../../stream';
+import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs, getHandlerApi } from '../handler';
 
 describe('Handler', () => {
 
@@ -30,34 +30,47 @@ describe('Handler', () => {
                 defineHandlerOutput(outSchema, ['Out_1', 'Out_2']),
                 defineHandlerOutput(outSchema_2, ['Out_21']),
             ),
-            handle: (api) => async (msg) => {
-                api.out(id_1).Out_1(msg.payload);
-                api.out(id_1).Out_2(msg.payload.toString());
-                api.out_2(id_2).Out_21(msg.payload + 5);
+            handle: (api) => async ({ message, streamName }) => {
+                api.out(streamName.id).Out_1(message.payload);
+                api.out(streamName.id).Out_2(message.payload.toString());
+                api.out_2(streamName.id).Out_21(message.payload + 5);
             },
         });
 
         const payload = 5;
-        const message: MessageType<typeof inSchema.schema.In_1> = { _tag: 'In_1', payload };
-        const recv: AnyMessage[] = [];
-        const api = getHandlerApi(traceId, handler.config.schema.output, msg => recv.push(msg));
+        type In = MessageResult<MessageType<typeof inSchema.schema.In_1>>;
+        type Out_1 = MessageResult<ChannelMessageType<typeof outSchema, ChannelTags<typeof outSchema>>>;
+        type Out_2 = MessageResult<ChannelMessageType<typeof outSchema_2, ChannelTags<typeof outSchema_2>>>;
+        const message: In = {
+            traceId,
+            streamName: getStreamName(inSchema)(id_1),
+            message: { _tag: 'In_1', payload },
+        };
+        const recv_1: Out_1[] = [];
+        const recv_2: Out_2[] = [];
+        const api = getHandlerApi(
+            traceId, handler.config.schema.output,
+            msg => msg.streamName.channel === 'out' ? recv_1.push(msg as any) : recv_2.push(msg as any)
+        );
 
         // Act
         await handler.execute(api)(message);
 
         // Assert
-        expect(recv.length).toBe(3);
+        expect(recv_1.length).toBe(2);
+        expect(recv_2.length).toBe(1);
 
-        const [m1, m2, m3] = recv;
+        const [m1, m2] = recv_1;
+        const [m3] = recv_2;
 
-        expect(m1._tag).toBe('Out_1')
-        expect(m1.payload).toBe(payload);
+        expect(m1.message._tag).toBe('Out_1')
+        expect(m1.message.payload).toBe(payload);
 
-        expect(m2._tag).toBe('Out_2')
-        expect(m2.payload).toBe(payload.toString());
+        expect(m2.message._tag).toBe('Out_2')
+        expect(m2.message.payload).toBe(payload.toString());
 
-        expect(m3._tag).toBe('Out_21')
-        expect(m3.payload).toBe(payload + 5);
+        expect(m3.message._tag).toBe('Out_21')
+        expect(m3.message.payload).toBe(payload + 5);
     })
 
 })

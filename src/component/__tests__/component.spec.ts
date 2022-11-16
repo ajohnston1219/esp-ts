@@ -1,6 +1,5 @@
 import { lastValueFrom } from 'rxjs';
-import { z } from 'zod';
-import { ComponentMessageSchema, createComponent, InMessage } from '..';
+import { createComponent } from '..';
 import { generateMessageId, generateTraceId, IncomingMessage, Message } from '../../message';
 import { generateId } from '../../stream';
 import { createPingPongComponentConfig } from '../../utils/tests';
@@ -12,7 +11,7 @@ describe('Component', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async (msg) => {
+        const component = createComponent(config, (c) => async ({ message: msg }) => {
             switch (msg._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
@@ -28,17 +27,17 @@ describe('Component', () => {
 
         // Assert
         const inSub = component.inbox.subscribe({
-            next: (msg) => {
-                expect(msg.traceId).toBe(traceId);
-                expect(msg.aggregateId).toBe(id);
-                expect(msg._tag).toBe('Ping');
+            next: ({ traceId, message, streamName: { id } }) => {
+                expect(traceId).toBe(traceId);
+                expect(id).toBe(id);
+                expect(message._tag).toBe('Ping');
             }
         });
         const outSub = component.outbox.subscribe({
-            next: (msg) => {
-                expect(msg.traceId).toBe(traceId);
-                expect(msg.aggregateId).toBe(id);
-                expect(msg._tag).toBe('Pong');
+            next: ({ traceId, message, streamName: { id } }) => {
+                expect(traceId).toBe(traceId);
+                expect(id).toBe(id);
+                expect(message._tag).toBe('Pong');
             }
         });
         inSub.unsubscribe();
@@ -51,13 +50,13 @@ describe('Component', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async (msg) => {
-            switch (msg._tag) {
+        const component = createComponent(config, (c) => async ({ traceId, message, streamName: { id } }) => {
+            switch (message._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
                     return c.success();
                 case 'PingMultiple':
-                    c.send.pong(id).PongMultiple(msg.payload);
+                    c.send.pong(id).PongMultiple(message.payload);
                     return c.success();
             }
         });
@@ -75,19 +74,19 @@ describe('Component', () => {
 
         // Assert
         const inSub = component.inbox.subscribe({
-            next: (msg) => {
-                expect(msg.traceId).toBe(traceId);
-                expect(msg.aggregateId).toBe(id);
-                expect(msg._tag).toBe('Ping');
+            next: ({ message, traceId, streamName: { id } }) => {
+                expect(traceId).toBe(traceId);
+                expect(id).toBe(id);
+                expect(message._tag).toBe('Ping');
             }
         });
         const outSub = component.outbox.subscribe({
-            next: (msg) => {
-                expect(msg.traceId).toBe(traceId);
-                expect(msg.aggregateId).toBe(id);
-                expect(msg.service).toBe('my-service');
-                expect(msg.channel).toBe('pong');
-                expect(msg._tag).toBe('Pong');
+            next: ({ message, traceId, streamName }) => {
+                expect(traceId).toBe(traceId);
+                expect(id).toBe(id);
+                expect(streamName.service).toBe('my-service');
+                expect(streamName.channel).toBe('pong');
+                expect(message._tag).toBe('Pong');
             }
         });
         inSub.unsubscribe();
@@ -100,7 +99,7 @@ describe('Component', () => {
         const id = generateId();
         const traceId = generateTraceId();
         const config = createPingPongComponentConfig();
-        const component = createComponent(config, (c) => async (msg) => {
+        const component = createComponent(config, (c) => async ({ message: msg }) => {
             switch (msg._tag) {
                 case 'Ping':
                     c.send.pong(id).Pong();
@@ -130,11 +129,11 @@ describe('Component', () => {
 
         expect(inResult).toBeNull();
         expect(outResult).toBeNull();
-        expect(ping._tag).toBe('Ping');
-        expect(ping.aggregateId).toBe(id);
+        expect(ping.message._tag).toBe('Ping');
+        expect(ping.streamName.id).toBe(id);
         expect(ping.traceId).toBe(traceId);
-        expect(pong._tag).toBe('Pong');
-        expect(pong.aggregateId).toBe(id);
+        expect(pong.message._tag).toBe('Pong');
+        expect(pong.streamName.id).toBe(id);
         expect(pong.traceId).toBe(traceId);
     })
 })
