@@ -74,18 +74,21 @@ export function createMathAggregate() {
         },
     });
 
-    const config: AggregateCreateConfig<'math', typeof stateSchema, typeof mathCommands, typeof mathEvents, typeof tags, string> = {
+    // const config: AggregateCreateConfig<'math', typeof stateSchema, typeof mathCommands, typeof mathEvents, typeof tags, string> = {
+    // }
+
+    const schema = {
+        state: stateSchema,
+        commands: {
+            'math:command': mathCommands,
+        },
+        events: {
+            'math': mathEvents,
+        },
+    };
+    const aggregate = createAggregate('math', schema, {
         name: 'math',
         initialState,
-        schema: {
-            state: stateSchema,
-            commands: {
-                'math:command': mathCommands,
-            },
-            events: {
-                'math': mathEvents,
-            },
-        },
         project: ({ success }) => (state, { message: event }) => {
             switch (event._tag) {
                 case 'Added':
@@ -114,9 +117,7 @@ export function createMathAggregate() {
                 'Subtract': subtractHandler,
             },
         }
-    }
-
-    const aggregate = createAggregate(config);
+    });
 
     return aggregate;
 }

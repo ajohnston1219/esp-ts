@@ -101,9 +101,39 @@ export type AggregateCreateConfig<Name extends string, StateSchema extends Schem
     readonly get: GetAggregateFunction<StateSchema, FR>;
     readonly update: UpdateAggregateFunction<StateSchema, FR>;
 } & AggregateConfig<Name, StateSchema, In, Out, OutTags>;
-export function createAggregate<Name extends string, StateSchema extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>, FR extends string>({
-    name, initialState, schema, project, get, update, handlers,
-}: AggregateCreateConfig<Name, StateSchema, In, Out, OutTags, FR>): Aggregate<Name, StateSchema, In, Out, OutTags, FR> {
+
+export type AggregateBuilderConfig<Name extends string, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string> = {
+    readonly name: Name;
+    readonly state: S;
+    readonly commands: In;
+    readonly events: Out;
+    readonly project: AggregateProjectionFunction<S, Out, FR>;
+    readonly get: GetAggregateFunction<S, FR>;
+    readonly update: UpdateAggregateFunction<S, FR>;
+}
+
+type SomeAggregateBuilder<Name extends string, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema> =
+    NextAggregateBuilder<Name, S, In, Out, HandlerTags<Out>, [...Handler<In, ChannelTags<In>, Out, HandlerTags<Out>>[]], string>;
+type LastBuilderType<Config extends AggregateBuilderConfig<string, SchemaType, AnyChannelSchema, AnyChannelSchema, string>> =
+    SomeAggregateBuilder<Config['name'], Config['state'], Config['commands'], Config['events']>;
+export type NextAggregateBuilder<Name extends string, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>, H extends [...Handler<In, ChannelTags<In>, Out, OutTags>[]], FR extends string> = {
+    readonly config: AggregateBuilderConfig<Name, S, In, Out, FR>;
+    readonly handlers: H;
+}
+type BindHandlerFunction<N extends string, S extends SchemaType, In extends AnyChannelSchema, InTag extends ChannelTags<In>, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>, HS extends [...Handler<In, ChannelTags<In>, Out, OutTags>[]], H extends Handler<In, InTag, Out, OutTags>, FR extends string> =
+    (handler: H) => NextAggregateBuilder<N, S, In, Out, OutTags, [...H[]], FR>
+
+
+export function createAggregate<
+    Name extends string,
+    StateSchema extends SchemaType,
+    In extends AnyChannelSchema,
+    Out extends AnyChannelSchema,
+    OutTags extends HandlerTags<Out>,
+    FR extends string
+>(name: Name, schema: AggregateSchema<StateSchema, In, Out>, {
+    initialState, project, get, update, handlers,
+}: Omit<AggregateCreateConfig<Name, StateSchema, In, Out, OutTags, FR>, 'name' | 'schema'>): Aggregate<Name, StateSchema, In, Out, OutTags, FR> {
 
     type Comp = Component<ComponentConfig<Name, In, Out>, In, Out, FR>;
     const api: ProjectionAPI<StateSchema, FR> = {
