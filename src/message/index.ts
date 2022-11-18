@@ -1,6 +1,6 @@
 import { AggregateId, StreamName } from '../stream';
 import * as uuid from 'uuid';
-import { any, z } from 'zod';
+import { z } from 'zod';
 import { SchemaDefinition, SchemaMap, SchemaTag, SchemaType, TypeOfSchema } from '../schema';
 
 export type Message<Tag extends string, Payload> = { readonly _tag: Tag, payload: Payload }
@@ -34,11 +34,11 @@ export type NoMessageSchema = MessageSchema<'__IGNORE__', z.ZodUndefined>;
 
 export type MessageTag<M extends AnyMessageSchema> = SchemaTag<M>;
 export type MessagePayload<M extends AnyMessageSchema> = TypeOfSchema<M>;
-export type MessageType<M extends AnyMessageSchema> = {
-    [Tag in MessageTag<M>]: M extends z.ZodObject<{ readonly _tag: z.ZodLiteral<Tag> }>
-        ? Message<MessageTag<M>, MessagePayload<M>>
-        : never;
-}[MessageTag<M>];
+export type MessageTypes<M extends AnyMessageSchema> = {
+    readonly [S in M as S['_tag']]: Message<S['_tag'], TypeOfSchema<S>>;
+}
+export type GetMessageType<M extends AnyMessageSchema, Tag extends M['_tag']> =
+    MessageTypes<M>[Tag];
 
 export type MessageResult<M extends AnyMessage> = Envelope<M>;
 export type MessageCreatorNoId<M extends AnyMessage> = M['payload'] extends undefined | void
@@ -47,12 +47,12 @@ export type MessageCreatorNoId<M extends AnyMessage> = M['payload'] extends unde
 export type MessageCreatorNoTraceId<M extends AnyMessage> = (id: AggregateId) => MessageCreatorNoId<M>;
 export type MessageCreator<M extends AnyMessage> = (traceId: TraceId) => MessageCreatorNoTraceId<M>;
 
-function createMessage<Schema extends AnyMessageSchema>(
+function createMessage<Tag extends string, Schema extends MessageSchema<Tag, SchemaType>>(
     traceId: TraceId,
     streamName: StreamName,
     tag: MessageTag<Schema>,
     payload: MessagePayload<Schema>,
-): MessageResult<MessageType<Schema>> {
+): MessageResult<Message<Tag, TypeOfSchema<Schema>>> {
     const result: any = payload === undefined ? {
         traceId,
         streamName,
@@ -69,13 +69,13 @@ export type MessageHookFunction<M extends AnyMessage> = (message: MessageResult<
 export interface MessageHook<M extends AnyMessage> {
     after?: MessageHookFunction<M>[],
 }
-export function getMessageCreator<T extends MessageTag<Schema>, Schema extends AnyMessageSchema>(
+export function getMessageCreator<T extends string, Schema extends MessageSchema<T, SchemaType>>(
     tag: T,
     streamName: (id: AggregateId) => StreamName,
-    hooks?: MessageHook<MessageType<Schema>>,
-): MessageCreator<MessageType<Schema>> {
+    hooks?: MessageHook<Message<T, TypeOfSchema<Schema>>>,
+): MessageCreator<Message<T, TypeOfSchema<Schema>>> {
     return (traceId: TraceId) => (id: AggregateId) => (payload?: MessagePayload<Schema>) => {
-        const message = createMessage<Schema>(traceId, streamName(id), tag, payload);
+        const message = createMessage<T, Schema>(traceId, streamName(id), tag, payload);
         if (hooks?.after) {
             hooks.after.forEach(hook => hook(message));
         }

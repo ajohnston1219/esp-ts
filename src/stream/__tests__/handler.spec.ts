@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { generateTraceId, MessageResult, MessageType } from '../../message';
 import { define } from '../../schema';
-import { ChannelMessageType, ChannelTags, defineChannel, generateId, getStreamName } from '../../stream';
+import { generateId, getStreamName } from '..';
 import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs, getHandlerApi, HandlerTags } from '../handler';
+import { ChannelTags, defineChannel, GetChannelMessageType } from '../../schema/channel';
 
 describe('Handler', () => {
 
@@ -39,9 +40,9 @@ describe('Handler', () => {
         });
 
         const payload = 5;
-        type In = MessageResult<MessageType<typeof inSchema.schema.In_1>>;
-        type Out_1 = MessageResult<ChannelMessageType<typeof outSchema, ChannelTags<typeof outSchema>>>;
-        type Out_2 = MessageResult<ChannelMessageType<typeof outSchema_2, ChannelTags<typeof outSchema_2>>>;
+        type In = MessageResult<GetChannelMessageType<typeof inSchema, 'In_1'>>;
+        type Out_1 = MessageResult<GetChannelMessageType<typeof outSchema, ChannelTags<typeof outSchema>>>;
+        type Out_2 = MessageResult<GetChannelMessageType<typeof outSchema_2, ChannelTags<typeof outSchema_2>>>;
         const message: In = {
             traceId,
             streamName: getStreamName(inSchema)(id_1),

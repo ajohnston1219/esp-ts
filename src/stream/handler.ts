@@ -1,14 +1,15 @@
-import { getMessageCreator, MessageHookFunction, MessageResult, MessageTag, MessageType, TraceId } from "../message";
-import { AggregateId, AnyChannelSchema, ChannelMessageCreatorsNoId, ChannelMessageSchema, ChannelName, ChannelTags, getStreamName } from "../stream";
+import { getMessageCreator, MessageHookFunction, MessageResult, MessageTag, TraceId } from "../message";
+import { AnyChannelSchema, ChannelNames, ChannelTags, GetChannelMessageSchema, GetChannelMessageType } from "../schema/channel";
+import { AggregateId, ChannelMessageCreatorsNoId, getStreamName } from "../stream";
 import { KeysOfUnion } from "../utils/types";
 
 export type HandlerTags<C extends AnyChannelSchema> = {
-    [N in ChannelName<C>]: C extends { readonly _tag: N }
+    [N in ChannelNames<C>]: C extends { readonly _tag: N }
         ? { [Tag in ChannelTags<C>]: boolean }
         : never;
 }
-export type HandlerTagUnion<CN extends ChannelName<C>, C extends AnyChannelSchema, HT extends HandlerTags<C>> = KeysOfUnion<HT[CN]>;
-export type HandlerChannel<CN extends ChannelName<C>, C extends AnyChannelSchema, Tags extends HandlerTags<C>> = {
+export type HandlerTagUnion<CN extends ChannelNames<C>, C extends AnyChannelSchema, HT extends HandlerTags<C>> = KeysOfUnion<HT[CN]>;
+export type HandlerChannel<CN extends ChannelNames<C>, C extends AnyChannelSchema, Tags extends HandlerTags<C>> = {
     readonly _tag: CN;
     channel: C;
     tags: Tags;
@@ -22,18 +23,18 @@ export type HandlerInputSchema<In extends AnyChannelSchema, Tag extends ChannelT
     readonly tag: Tag;
 }
 export type HandlerSchema<In extends AnyChannelSchema, InTag extends ChannelTags<In>, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>> = {
-    readonly _tag: MessageTag<ChannelMessageSchema<In, InTag>>;
+    readonly _tag: InTag;
     readonly input: HandlerInputSchema<In, InTag>;
     readonly output: HandlerChannelSchema<Out, OutTags>;
 }
 
 export type HandlerAPI<O extends AnyChannelSchema, Tags extends HandlerTags<O>> = {
-    [Key in ChannelName<O>]: O extends { readonly _tag: Key }
+    [Key in ChannelNames<O>]: O extends { readonly _tag: Key }
         ? (id: AggregateId) => ChannelMessageCreatorsNoId<O, Extract<ChannelTags<O>, KeysOfUnion<Tags[Key]>>>
         : never;
 }
 export type HandlerFunction<In extends AnyChannelSchema, InTag extends ChannelTags<In>, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> =
-    (api: HandlerAPI<Out, Tags>) => (message: MessageResult<MessageType<ChannelMessageSchema<In, InTag>>>) => Promise<void>;
+    (api: HandlerAPI<Out, Tags>) => (message: MessageResult<GetChannelMessageType<In, InTag>>) => Promise<void>;
 
 export type HandlerConfig<In extends AnyChannelSchema, InTag extends ChannelTags<In>, Out extends AnyChannelSchema, Tags extends HandlerTags<Out>> = {
     readonly _tag: InTag;

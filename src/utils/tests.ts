@@ -1,9 +1,10 @@
 import { TypeOf, z } from 'zod'
-import { AggregateCreateConfig, createAggregate } from '../aggregate';
+import { createAggregate } from '../aggregate';
 import { ComponentConfig, ComponentHandlerFunction, createComponent } from '../component';
-import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs } from '../component/handler';
 import { define } from '../schema';
-import { AggregateId, defineChannel } from '../stream';
+import { defineChannel } from '../schema/channel';
+import { AggregateId } from '../stream';
+import { defineHandler, defineHandlerInput, defineHandlerOutput, defineHandlerOutputs } from '../stream/handler';
 import { defineModel, defineMutation, defineMutations, defineQueries, defineQuery } from '../view/model';
 
 export const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));

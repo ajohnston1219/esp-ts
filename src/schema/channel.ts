@@ -1,8 +1,6 @@
-import { Schema, TypeOf, z } from "zod";
-import { AnySchemaDefinition, define, defineMap, GetSchemaFromMap, GetSchemaType, SchemaMap, SchemaMapSchemas, SchemaMapTags, SchemaType, TypeOfSchema } from ".";
-import { AnyMessage, AnyMessageSchema, Message, MessagePayload, NoMessageSchema } from "../message";
-import { KeysOfUnion } from "../utils/types";
-import { GetTaggedObject, IsTagged } from "./tagged";
+import { z } from "zod";
+import { AnySchemaDefinition, define, defineMap, SchemaMap, SchemaMapTags, TypeOfSchema } from ".";
+import { AnyMessage, AnyMessageSchema, GetMessageType, Message, MessageTypes, NoMessageSchema } from "../message";
 
 export type ChannelSchema<N extends string, M extends AnyMessageSchema, S extends string> =
     SchemaMap<N, M> & { readonly service: S };
@@ -34,27 +32,23 @@ export const ignoreChannel = (): { '__IGNORE__': IgnoreChannel } => ({
 export type ChannelNames<Schema extends AnyChannelSchema> = Schema['_tag'];
 export type ChannelTags<Schema extends AnyChannelSchema> = SchemaMapTags<Schema>;
 
-type ChannelMessageSchemas<Schema extends AnySchemaDefinition> = {
-    [S in Schema as S['_tag']]: S;
+export type ChannelMessageSchemas<Schema extends AnySchemaDefinition> = {
+    readonly [S in Schema as S['_tag']]: S;
 }
 export type GetChannelMessageSchema<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> =
     ChannelMessageSchemas<Schema['schema'][Tag]>[Tag];
 
-type ChannelMessageTypes<Schema extends AnySchemaDefinition> = {
-    [S in Schema as S['_tag']]: Message<S['_tag'], TypeOfSchema<S>>;
+export type ChannelMessageTypes<Schema extends AnySchemaDefinition> = {
+    readonly [S in Schema as S['_tag']]: Message<S['_tag'], TypeOfSchema<S>>;
 }
 export type GetChannelMessageType<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> =
     ChannelMessageTypes<Schema['schema'][Tag]>[Tag];
 
-const channel = defineChannel('my-service', 'my-channel',
-    define('One', z.number()),
-    define('Two', z.string()),
-)
+const one = define('One', z.number());
+const two = define('Two', z.string());
+const channel = defineChannel('my-service', 'my-channel', one, two);
 
-type C = typeof channel;
-type S = typeof channel.schema;
-type SS = C['schema'];
-type N = ChannelNames<C>;
-type T = ChannelTags<C>;
-type MS = GetChannelMessageSchema<C, 'One' | 'Two'>;
-type MT = GetChannelMessageType<C, 'One' | 'Two'>;
+type MT = MessageTypes<typeof one | typeof two>;
+type OT = GetMessageType<typeof one | typeof two, 'One'>;
+type IS = OT extends AnyMessage ? true : false;
+
