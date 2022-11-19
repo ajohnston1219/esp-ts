@@ -1,7 +1,7 @@
-import { AnyComponentConfig, Component, ComponentChannelNames, ComponentConfig, ComponentMessageType } from "../component";
 import { AnyMessage, IncomingMessage, MessageType, StoredMessage } from "../message";
-import { AnyChannelSchema, Channel, channelEquals, ChannelMessageSchema, ChannelTags } from "../stream";
-import { KeysOfUnion } from "../utils/types";
+import { AnyChannelSchema, ChannelSchemas } from "../schema/channel";
+import { AnyMessageSchemaArray, AnySubscription, getSubscriptionAPI, HandlerOutput, InOutMap, SubscriptionHandler } from "../schema/subscription";
+import { Channel, channelEquals } from '../stream';
 
 export type HandlerFunction<M extends AnyMessage> = (message: IncomingMessage<M>) => Promise<void>;
 
@@ -23,18 +23,20 @@ export class Dispatcher<M extends AnyMessage> {
         return new Dispatcher(channels.map(channel => ({ channel, offset: 0 })), handler);
     }
 
-    public static fromComponent<N extends string, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string>(component: Component<ComponentConfig<N, In, Out>, In, Out, FR>): Dispatcher<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>> {
-        const handler: HandlerFunction<MessageType<ChannelMessageSchema<In, ChannelTags<In>>>> = async (message) => {
-            component.recvRaw(message);
-        }
-        const subscriptions: DispatcherSubscription[] = Object.keys(component.config.inputChannels).map(key => {
-            const schema = (component.config.inputChannels as any)[key];
-            const channel = { channel: schema._tag, service: schema.service };
-            return {
-                channel,
+    public static fromSubscription<S extends AnySubscription<In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(subscription: S) {
+        const subscriptions: DispatcherSubscription[] = [
+            {
+                channel: { service: subscription.input.service, channel: subscription.input.name },
                 offset: 0,
-            };
-        });
+            }
+        ];
+        const handler: HandlerFunction<MessageType<ChannelSchemas<In>>> = async (incoming) => {
+            if (incoming.message._tag in subscription.handle) {
+                const handler = subscription.handle[incoming.message._tag] as SubscriptionHandler<ChannelSchemas<In>, In, Out, HandlerOutput<Out, AnyMessageSchemaArray<Out>, string[]>, string[]>;
+                const api = getSubscriptionAPI(incoming.traceId, incoming.message._tag, subscription);
+                await handler.execute(api)(incoming);
+            }
+        }
         return new Dispatcher(subscriptions, handler);
     }
 

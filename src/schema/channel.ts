@@ -1,54 +1,50 @@
-import { z } from "zod";
-import { AnySchemaDefinition, define, defineMap, SchemaMap, SchemaMapTags, TypeOfSchema } from ".";
-import { AnyMessage, AnyMessageSchema, GetMessageType, Message, MessageTypes, NoMessageSchema } from "../message";
+import { TypeOf, z } from "zod";
+import { AnySchemaDefinition, define, defineSet, MessageSet, SomeSchemaDefinition, SomeTaggedSchema, TypeOfSchema } from ".";
+import { AnyMessage, AnyMessageSchema, defineMessage, GetMessageType, Message, MessagePayload, MessageTag, MessageType, NoMessageSchema } from "../message";
+import { KeysOfUnion } from "../utils/types";
+import { TaggedMapFromArray } from "./tagged";
 
-export type ChannelSchema<N extends string, M extends AnyMessageSchema, S extends string> =
-    SchemaMap<N, M> & { readonly service: S };
+export type ChannelSchema<N extends string, M extends AnyMessageSchema, S extends string> = MessageSet<N, M> & { readonly service: S }
 export type AnyChannelSchema = ChannelSchema<string, AnyMessageSchema, string>;
 
-export const defineChannel = <N extends string, M extends AnyMessageSchema[], S extends string>(
+export const defineChannel = <N extends string, M extends [...AnyMessageSchema[]], S extends string>(
     service: S,
     name: N,
-    ...schemas: M
+    ...messages: M
 ): ChannelSchema<N, M[number], S> => ({
     service,
-    ...defineMap<N, M[number]>(name, schemas.reduce((acc, curr) => ({
-        ...acc,
-        [curr._tag]: curr,
-    }), {} as any)),
+    ...defineSet(name, ...messages),
 });
 
 export type IgnoreChannel = ChannelSchema<'__IGNORE__', NoMessageSchema, '__LOCAL__'>;
 export const ignoreChannel = (): { '__IGNORE__': IgnoreChannel } => ({
     '__IGNORE__': {
-        _tag: '__IGNORE__',
         service: '__LOCAL__',
-        schema: {
-            '__IGNORE__': define('__IGNORE__', z.undefined()),
-        },
+        name: '__IGNORE__',
+        schemas: [
+            defineMessage('__IGNORE__', z.undefined()),
+        ],
     },
 });
 
-export type ChannelNames<Schema extends AnyChannelSchema> = Schema['_tag'];
-export type ChannelTags<Schema extends AnyChannelSchema> = SchemaMapTags<Schema>;
-
-export type ChannelMessageSchemas<Schema extends AnySchemaDefinition> = {
-    readonly [S in Schema as S['_tag']]: S;
+export type ChannelName<Schema extends AnyChannelSchema> = Schema['name'];
+export type ChannelNames<Schema extends AnyChannelSchema> = Schema['name'];
+export type ChannelSchemas<Schema extends AnyChannelSchema> = Schema['schemas'][number];
+export type ChannelTags<Schema extends AnyChannelSchema> = MessageTag<ChannelSchemas<Schema>>;
+export type ChannelPayloads<Schema extends AnyChannelSchema> = MessagePayload<ChannelSchemas<Schema>>;
+export type ChannelMessages<Schema extends AnyChannelSchema> = {
+    [M in Schema['schemas'][number] as M[0]]: MessageType<M>;
 }
-export type GetChannelMessageSchema<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> =
-    ChannelMessageSchemas<Schema['schema'][Tag]>[Tag];
+export type GetChannelMessage<Schema extends AnyChannelSchema, Tag extends Schema['schemas'][number][0]> =
+    ChannelMessages<Schema>[Tag];
 
-export type ChannelMessageTypes<Schema extends AnySchemaDefinition> = {
-    readonly [S in Schema as S['_tag']]: Message<S['_tag'], TypeOfSchema<S>>;
-}
-export type GetChannelMessageType<Schema extends AnyChannelSchema, Tag extends ChannelTags<Schema>> =
-    ChannelMessageTypes<Schema['schema'][Tag]>[Tag];
-
-const one = define('One', z.number());
-const two = define('Two', z.string());
+const one = defineMessage('One', z.number());
+const two = defineMessage('Two', z.string());
 const channel = defineChannel('my-service', 'my-channel', one, two);
 
-type MT = MessageTypes<typeof one | typeof two>;
-type OT = GetMessageType<typeof one | typeof two, 'One'>;
-type IS = OT extends AnyMessage ? true : false;
-
+type CN = ChannelNames<typeof channel>;
+type CS = ChannelSchemas<typeof channel>;
+type CT = ChannelTags<typeof channel>;
+type CP = ChannelPayloads<typeof channel>;
+type CMS = ChannelMessages<typeof channel>;
+type CM = GetChannelMessage<typeof channel, 'One' | 'Two'>;

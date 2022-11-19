@@ -1,9 +1,7 @@
-import { AnyMessage, AnyMessageSchema, Envelope, getMessageCreator, Message, MessageCreator, MessageCreatorNoId, MessageCreatorNoTraceId, MessageHook, MessagePayload, NoMessageSchema, TraceId } from '../message';
+import { AnyMessage, Envelope, getMessageCreator, MessageCreator, MessageCreatorNoId, MessageCreatorNoTraceId, MessageHook, MessageType, NoMessageSchema, TraceId } from '../message';
 import { z } from 'zod';
 import * as uuid from 'uuid';
-import { KeysOfUnion } from '../utils/types';
-import { define, defineMap, SchemaMap } from '../schema';
-import { AnyChannelSchema, ChannelMessageType, ChannelTags } from '../schema/channel';
+import { AnyChannelSchema, ChannelSchemas, ChannelTags } from '../schema/channel';
 
 export type AggregateId = string;
 export const generateId = uuid.v4;
@@ -38,20 +36,20 @@ export function messageInStream({ streamName }: Envelope<AnyMessage>, _streamNam
 }
 
 export type ChannelMessageCreators<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
-    [Tag in Tags]: MessageCreator<ChannelMessageType<Schema, Tag>>;
+    [Tag in Tags]: MessageCreator<MessageType<ChannelSchemas<Schema>>>
 }
 export type ChannelMessageCreatorsNoTraceId<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
-    [Tag in Tags]: MessageCreatorNoTraceId<ChannelMessageType<Schema, Tag>>;
+    [Tag in Tags]: MessageCreatorNoTraceId<MessageType<ChannelSchemas<Schema>>>;
 }
 export type ChannelMessageCreatorsNoId<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
-    [Tag in Tags]: MessageCreatorNoId<ChannelMessageType<Schema, Tag>>;
+    [Tag in Tags]: MessageCreatorNoId<MessageType<ChannelSchemas<Schema>>>;
 }
 
 export type MessageHooks<Schema extends AnyChannelSchema, Tags extends ChannelTags<Schema> = ChannelTags<Schema>> = {
-    [Tag in Tags]: MessageHook<ChannelMessageType<Schema, Tag>>;
+    [Tag in Tags]: MessageHook<MessageType<ChannelSchemas<Schema>>>;
 }
 export const getStreamName = <Schema extends AnyChannelSchema>(schema: Schema) => (id: string) => ({
-    channel: schema._tag,
+    channel: schema.name,
     service: schema.service,
     id,
 });
@@ -63,9 +61,9 @@ export function getMessageCreators<Schema extends AnyChannelSchema>(
     const getHooks: any = (schemaName: ChannelTags<Schema>) => {
         return hooks ? hooks[schemaName] : undefined;
     };
-    const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr: any) => ({
+    const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr: any) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schema[curr]._tag as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr) as any),
+        [curr]: getMessageCreator(schema.schemas[curr][0] as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr) as any),
     }) as any, {} as any);
     return creators;
 }
@@ -78,9 +76,9 @@ export function getMessageCreatorsNoId<Schema extends AnyChannelSchema>(
     const getHooks: any = (schemaName: ChannelTags<Schema>) => {
         return hooks ? hooks[schemaName] : undefined;
     };
-    const creators = Object.keys(schema.schema).reduce<ChannelMessageCreators<Schema>>((acc, curr: any) => ({
+    const creators = Object.keys(schema.schemas).reduce<ChannelMessageCreators<Schema>>((acc, curr: any) => ({
         ...acc,
-        [curr]: getMessageCreator(schema.schema[curr]._tag as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr))(traceId)(id),
+        [curr]: getMessageCreator(schema.schemas[curr][0] as unknown as ChannelTags<Schema>, getStreamName(schema), getHooks(curr))(traceId)(id),
     }) as any, {} as any);
     return creators;
 }
