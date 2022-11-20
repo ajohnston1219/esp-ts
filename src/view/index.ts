@@ -1,4 +1,4 @@
-import { Component, ComponentConfig, ComponentSubscriptions, createComponent, IgnoreChannel, ignoreChannel } from '../component';
+import { Component, ComponentConfig, ComponentSubscriptions, createComponent, IgnoreChannel, ignoreChannel, SomeComponent } from '../component';
 import { SchemaType } from '../schema';
 import { AnyModel } from './model';
 import { AnyChannelSchema, ChannelNames, ChannelSchemas } from '../schema/channel';
@@ -45,20 +45,22 @@ export type ViewComponent<V extends AnyViewConfig> =
 
 export interface View<Config extends AnyViewConfig, In extends AnyChannelSchema, FailureReason extends string> {
     readonly config: Config;
-    readonly component: Component<ComponentConfig<Config['name'], In, AnyChannelSchema>, In, AnyChannelSchema, FailureReason>
+    readonly component: SomeComponent<In, IgnoreChannel>;
     readonly model: Config['model'];
 }
 
-export function createView<N extends string, In extends AnyChannelSchema, M extends AnyModel, FailureReason extends string>(
-    config: ViewConfig<N, ViewSchema<In>, M>,
+export function createView<N extends string, V extends ViewConfig<N, ViewSchema<In>, M>, In extends AnyChannelSchema, M extends AnyModel, FailureReason extends string>(
+    config: V,
     subscriptions: ComponentSubscriptions<AnySubscription<In, IgnoreChannel>, In, IgnoreChannel>,
 ): View<ViewConfig<N, ViewSchema<In>, M>, In, FailureReason> {
 
     type Out = IgnoreChannel;
-    type Comp = ComponentConfig<N, In, Out>;
-    const component: Component<Comp, In, Out, FailureReason> = createComponent({
+    type Config = ComponentConfig<N, In, Out>;
+    type Comp = Component<Config, In, Out>;
+
+    const component: Comp = createComponent({
         name: config.name,
-        inputChannels: config.schema.events,
+        inputChannels: config.schema.events.reduce((acc, curr) => ({ ...acc, [curr[0]]: curr }), {}),
         outputChannels: ignoreChannel(),
         subscriptions,
     });

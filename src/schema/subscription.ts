@@ -15,7 +15,7 @@ export type HandlerResult<FR extends string> =
     | HandlerResultFailure<FR>
     | HandlerResultIgnore;
 
-type MessageSchemaArray<M extends ChannelSchemas<Out>, Out extends ChannelSchema<string, AnyMessageSchema, string>> =
+type MessageSchemaArray<M extends ChannelSchemas<Out>, Out extends AnyChannelSchema> =
     readonly [...[Out, [...M[]]][]];
 export type AnyMessageSchemaArray<Out extends AnyChannelSchema> = MessageSchemaArray<ChannelSchemas<Out>, Out>;
 type FailureArray = readonly [...string[]];

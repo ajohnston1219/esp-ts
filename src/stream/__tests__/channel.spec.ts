@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { generateId, getMessageCreators } from '..';
 import { defineMessage, generateTraceId } from '../../message';
-import { define } from '../../schema';
 import { defineChannel } from '../../schema/channel';
 
 describe('Channel', () => {

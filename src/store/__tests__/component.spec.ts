@@ -1,5 +1,4 @@
 import { InMemoryMessageStoreDB, MessageStore } from '..';
-import { createComponent } from '../../component';
 import { generateTraceId } from '../../message';
 import { generateId } from '../../stream';
 import { getPingPongComponentCreator, delay, nextTick } from '../../utils/tests';

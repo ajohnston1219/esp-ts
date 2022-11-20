@@ -137,7 +137,7 @@ export class MessageStore implements MessageStore {
     }
 
     public bindComponent<C extends SomeComponent<In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(component: C): void {
-        const dispatcher = Dispatcher.fromComponent<C, In, Out>(component);
+        const dispatcher = Dispatcher.fromComponent(component);
         this.bindDispatcher(dispatcher);
         this.bindOutputStream(component.outbox.pipe(
             map((outgoing) => {

@@ -1,10 +1,11 @@
-import { z } from 'zod'
+import { TypeOf, z } from 'zod'
 // import { createAggregate } from '../aggregate';
 import { Component, ComponentConfig, createComponent } from '../component';
 import { defineMessage } from '../message';
 import { define } from '../schema';
 import { defineChannel } from '../schema/channel';
 import { AnySubscription } from '../schema/subscription';
+import { defineModel, defineMutation, defineMutations, defineQueries, defineQuery } from '../view/model';
 
 export const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 export const nextTick = () => delay(0);
@@ -20,9 +21,7 @@ export function getPingPongComponentCreator() {
 
     type In = typeof pingChannel;
     type Out = typeof pongChannel;
-    type Config = ComponentConfig<'my-component', In, Out>;
-    type Comp = Component<Config, In, Out, string>;
-    const componentConfig: Omit<Config, 'subscriptions'> = {
+    const componentConfig = {
         name: 'my-component' as const,
         inputChannels: {
             'ping': define('ping', pingChannel),
@@ -31,9 +30,9 @@ export function getPingPongComponentCreator() {
             'pong': define('pong', pongChannel),
         },
     }
-    const create = (subscriptions: [...AnySubscription<In, Out>[]]): Comp => {
-        const config: Config = { ...componentConfig, subscriptions: subscriptions.map(s => [s.name, s]) };
-        return createComponent(config);
+    const create = (subscriptions: [...AnySubscription<In, Out>[]]) => {
+        const config: ComponentConfig<'my-component', In, Out> = { ...componentConfig, subscriptions: subscriptions.map(s => [s.name, s]) };
+        return createComponent<typeof config, In, Out>(config);
     }
     return { create, pingChannel, pingMessage, pingMultiMessage, pongChannel, pongMessage, pongMultiMessage };
 }
@@ -129,42 +128,42 @@ export function getPingPongComponentCreator() {
 //     return aggregate;
 // }
 
-// export function createUserModel() {
-//     const userSchema = z.object({
-//         name: z.string(),
-//         email: z.string().email(),
-//     })
+export function createUserModel() {
+    const userSchema = z.object({
+        name: z.string(),
+        email: z.string().email(),
+    })
 
-//     let user: TypeOf<typeof userSchema> = {
-//         name: 'Adam',
-//         email: 'ajohnston@hippomed.us',
-//     }
+    let user: TypeOf<typeof userSchema> = {
+        name: 'Adam',
+        email: 'ajohnston@hippomed.us',
+    }
 
-//     const get = defineQuery('get', {
-//         inputs: z.tuple([z.void()]),
-//         output: z.promise(userSchema),
-//         execute: async () => user,
-//     })
-//     const query = defineQueries(get);
+    const get = defineQuery('get', {
+        inputs: z.tuple([z.void()]),
+        output: z.promise(userSchema),
+        execute: async () => user,
+    })
+    const query = defineQueries(get);
 
-//     const create = defineMutation('create', {
-//         inputs: z.tuple([userSchema]),
-//         output: z.promise(z.void()),
-//         execute: async u => { user = u; },
-//     })
-//     const changeName = defineMutation('changeName', {
-//         inputs: z.tuple([z.string()]),
-//         output: z.promise(z.void()),
-//         execute: async name => { user = { ...user, name } },
-//     })
-//     const changeEmail = defineMutation('changeEmail', {
-//         inputs: z.tuple([z.string().email()]),
-//         output: z.promise(z.void()),
-//         execute: async email => { user = { ...user, email } },
-//     })
-//     const mutate = defineMutations(create, changeName, changeEmail);
+    const create = defineMutation('create', {
+        inputs: z.tuple([userSchema]),
+        output: z.promise(z.void()),
+        execute: async u => { user = u; },
+    })
+    const changeName = defineMutation('changeName', {
+        inputs: z.tuple([z.string()]),
+        output: z.promise(z.void()),
+        execute: async name => { user = { ...user, name } },
+    })
+    const changeEmail = defineMutation('changeEmail', {
+        inputs: z.tuple([z.string().email()]),
+        output: z.promise(z.void()),
+        execute: async email => { user = { ...user, email } },
+    })
+    const mutate = defineMutations(create, changeName, changeEmail);
 
-//     const model = defineModel('user', { query, mutate });
+    const model = defineModel('user', { query, mutate });
 
-//     return model;
-// }
+    return model;
+}

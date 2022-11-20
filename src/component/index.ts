@@ -28,7 +28,7 @@ export interface ComponentConfig<Name extends string, In extends AnyChannelSchem
     readonly subscriptions: ComponentSubscriptions<AnySubscription<In, Out>, In, Out>;
 }
 
-export type Component<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FailureReason extends string> = {
+export type Component<Config extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema> = {
     readonly config: Config;
     readonly recv: (message: IncomingMessage<MessageType<ChannelSchemas<In>>>) => void;
     readonly send: (message: OutgoingMessage<MessageType<ChannelSchemas<Out>>>) => void;
@@ -37,9 +37,9 @@ export type Component<Config extends ComponentConfig<string, In, Out>, In extend
     readonly stop: () => Promise<void>;
 };
 
-export function createComponent<N extends string, C extends ComponentConfig<N, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema, FR extends string, CanSend extends boolean = true>(
+export function createComponent<C extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(
     config: C,
-): Component<C, In, Out, FR> {
+): Component<C, In, Out> {
 
     type Incoming = IncomingMessage<MessageType<ChannelSchemas<In>>>;
     type Outgoing = OutgoingMessage<MessageType<ChannelSchemas<Out>>>;
@@ -98,7 +98,7 @@ export function createComponent<N extends string, C extends ComponentConfig<N, I
         ]);
     }
 
-    const component: Component<C, In, Out, FR> = {
+    const component: Component<C, In, Out> = {
         config,
         recv,
         send,
@@ -125,5 +125,5 @@ export type ComponentHandlerResult<FailureReason extends string> = ComponentHand
 export type AnyComponentConfig = ComponentConfig<string, AnyChannelSchema, AnyChannelSchema>;
 export type SomeComponentConfig<In extends AnyChannelSchema, Out extends AnyChannelSchema> =
     ComponentConfig<string, In, Out>;
-export type AnyComponent = Component<AnyComponentConfig, AnyChannelSchema, AnyChannelSchema, string>;
-export type SomeComponent<In extends AnyChannelSchema, Out extends AnyChannelSchema> = Component<SomeComponentConfig<In, Out>, In, Out, string>;
+export type AnyComponent = Component<AnyComponentConfig, AnyChannelSchema, AnyChannelSchema>;
+export type SomeComponent<In extends AnyChannelSchema, Out extends AnyChannelSchema> = Component<ComponentConfig<string, In, Out>, In, Out>;

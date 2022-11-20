@@ -5,6 +5,7 @@ import { Dispatcher, HandlerFunction } from "../dispatcher";
 import { getPingPongComponentCreator, nextTick } from "../../utils/tests";
 import { AnyMessageSchemaArray, createHandler, createSubscription, InOutMap } from "../../schema/subscription";
 import { ChannelSchemas } from "../../schema/channel";
+import { Component, ComponentConfig } from "../../component";
 
 const createChannel = (channel: string) => ({ channel, service: 'my-service' });
 
@@ -195,7 +196,7 @@ describe('Dispatcher', () => {
 
         const component = create([pingPongSubscription]);
         // TODO(adam): Type inference here
-        const dispatcher = Dispatcher.fromComponent<any, typeof pingChannel, typeof pongChannel>(component);
+        const dispatcher = Dispatcher.fromComponent(component);
         await messageStore.logMessage({
             traceId,
             streamName: { service: 'my-service', channel: 'ping', id },
