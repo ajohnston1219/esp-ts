@@ -1,8 +1,10 @@
-import { AnyMessageSchema, getMessageCreator, IncomingMessage, MessageCreatorNoId, MessageHook, MessageType, TraceId } from "../message";
+import { z } from "zod";
+import { SchemaType } from ".";
+import { AnyMessageSchema, getMessageCreator, IncomingMessage, Message, MessageHook, MessagePayload, MessageResult, MessageSchema, MessageType, TraceId } from "../message";
 import { AggregateId, getStreamName } from "../stream";
 import { KeysOfUnion } from "../utils/types";
 import { AnyChannelSchema, ChannelSchema, ChannelSchemas, ChannelTags } from "./channel";
-import { GetTag } from "./tagged";
+import { GetObject, GetTag } from "./tagged";
 
 type HandlerResultSuccess = { _tag: 'Success' };
 type HandlerResultFailure<FR extends string> = { _tag: 'Failure', reason: FR, message: string };
@@ -25,8 +27,10 @@ export type InOutMap<In extends AnyChannelSchema, Out extends AnyChannelSchema, 
     [Tag in ChannelTags<In>]: HandlerOutput<Out, M, F>;
 }
 
-type MessageCreators<Schema extends AnyMessageSchema> = {
-    [S in Schema as GetTag<Schema>]: MessageCreatorNoId<MessageType<S>>;
+export type MessageCreators<Schema extends AnyMessageSchema> = {
+    [S in Schema as GetTag<S>]: S extends MessageSchema<S[0], z.ZodUndefined | z.ZodVoid>
+        ? () => MessageResult<MessageType<S>>
+        : (payload: S[1]['_output']['payload']) => MessageResult<MessageType<S>>;
 }
 
 type HandlerAPI<Out extends AnyChannelSchema, Outputs extends HandlerOutput<Out, AnyMessageSchemaArray<Out>, FA>, FA extends FailureArray> = {
@@ -43,10 +47,13 @@ type SubscriptionFunction<M extends ChannelSchemas<In>, In extends AnyChannelSch
 
 export type SubscriptionHandler<M extends ChannelSchemas<In>, In extends AnyChannelSchema, Out extends AnyChannelSchema, Outputs extends InOutMap<In, Out, AnyMessageSchemaArray<Out>, FA>[M[0]], FA extends FailureArray> = {
     readonly _tag: GetTag<M>;
+    readonly message: GetObject<M>;
     readonly input: In;
     readonly outputs: Outputs;
     readonly execute: SubscriptionFunction<M, In, Out, Outputs, FA>;
 }
+export type AnySubscriptionHandler<In extends AnyChannelSchema, Out extends AnyChannelSchema> =
+    SubscriptionHandler<ChannelSchemas<In>, In, Out, HandlerOutput<Out, AnyMessageSchemaArray<Out>, FailureArray>, FailureArray>;
 
 type SubscriptionHandlerMap<In extends AnyChannelSchema, Out extends AnyChannelSchema, IO extends InOutMap<In, Out, AnyMessageSchemaArray<Out>, FailureArray>> = {
     readonly [M in ChannelSchemas<In> as GetTag<M>]: SubscriptionHandler<M, In, Out, IO[GetTag<M>], FailureArray>;
@@ -65,18 +72,19 @@ export type SubscriptionOutputs<In extends AnyChannelSchema, Out extends AnyChan
 export type SubscriptionInputMessage<In extends AnyChannelSchema> =
     MessageType<ChannelSchemas<In>>;
 
-export type HandlerConfig<Tag extends ChannelTags<In>, M extends ChannelSchemas<In>, In extends AnyChannelSchema, Out extends readonly [...AnyChannelSchema[]], Outputs extends HandlerOutput<Out[number], AnyMessageSchemaArray<Out[number]>, Failures>, Failures extends FailureArray> = {
-    readonly tag: Tag;
+export type HandlerConfig<M extends ChannelSchemas<In>, In extends AnyChannelSchema, Out extends readonly [...AnyChannelSchema[]], Outputs extends HandlerOutput<Out[number], AnyMessageSchemaArray<Out[number]>, Failures>, Failures extends FailureArray> = {
+    readonly message: M;
     readonly input: In;
     readonly outputs: Outputs;
     readonly execute: SubscriptionFunction<M, In, Out[number], Outputs, Failures>;
 }
 
-export function createHandler<Tag extends ChannelTags<In>, M extends ChannelSchemas<In>, In extends AnyChannelSchema, Out extends readonly [...AnyChannelSchema[]], Outputs extends HandlerOutput<Out[number], AnyMessageSchemaArray<Out[number]>, Failures>, Failures extends FailureArray>({
-    tag, input, outputs, execute,
-}: HandlerConfig<Tag, M, In, Out, Outputs, Failures>): SubscriptionHandler<M, In, Out[number], Outputs, Failures> {
+export function createHandler<M extends ChannelSchemas<In>, In extends AnyChannelSchema, Out extends readonly [...AnyChannelSchema[]], Outputs extends HandlerOutput<Out[number], AnyMessageSchemaArray<Out[number]>, Failures>, Failures extends FailureArray>({
+    message, input, outputs, execute,
+}: HandlerConfig<M, In, Out, Outputs, Failures>): SubscriptionHandler<M, In, Out[number], Outputs, Failures> {
     return {
-        _tag: tag,
+        _tag: message[0],
+        message: message[1],
         input,
         outputs,
         execute,
@@ -101,7 +109,7 @@ export function getSubscriptionAPI<In extends AnyChannelSchema, Out extends AnyC
     traceId: TraceId,
     tag: ChannelTags<In>,
     subscription: AnySubscription<In, Out>,
-    hooks?: MessageHook<MessageType<ChannelSchemas<In>>>,
+    hooks?: MessageHook<MessageType<ChannelSchemas<Out>>>,
 ): HandlerAPI<Out, Outputs, FA> {
     const success = (): HandlerResultSuccess => ({ _tag: 'Success' });
     const failure = (reason: FA[number], message: string): HandlerResultFailure<FA[number]> => ({ _tag: 'Failure', reason, message });

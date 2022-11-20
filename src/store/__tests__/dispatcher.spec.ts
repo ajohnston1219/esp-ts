@@ -2,8 +2,9 @@ import { InMemoryMessageStoreDB, MessageStore } from "..";
 import { generateTraceId, IncomingMessage, Message, OutgoingMessage } from "../../message";
 import { AggregateId, Channel, generateId, messageInChannel } from "../../stream";
 import { Dispatcher, HandlerFunction } from "../dispatcher";
-import { createComponent } from "../../component";
 import { getPingPongComponentCreator, nextTick } from "../../utils/tests";
+import { AnyMessageSchemaArray, createHandler, createSubscription, InOutMap } from "../../schema/subscription";
+import { ChannelSchemas } from "../../schema/channel";
 
 const createChannel = (channel: string) => ({ channel, service: 'my-service' });
 
@@ -29,8 +30,6 @@ const mathMessage = (message: MathEvent): OutgoingMessage<MathEvent> => ({
     streamName: mathStream(generateId()),
     message,
 })
-const addMessage = (amount: number) => mathMessage(addEvent(amount));
-const subtractMessage = (amount: number) => mathMessage(subtractEvent(amount));
 
 describe('Dispatcher', () => {
 
@@ -158,18 +157,45 @@ describe('Dispatcher', () => {
         // Arrange
         const id = generateId();
         const traceId = generateTraceId();
-        const create = getPingPongComponentCreator();
-        const component = create((c) => async ({ message }) => {
-            switch (message._tag) {
-                case 'Ping':
-                    c.send.pong(id).Pong();
-                    return c.success();
-                case 'PingMultiple':
-                    c.send.pong(id).PongMultiple(message.payload);
-                    return c.success();
-            }
+
+        const { create, pingChannel, pongChannel, pingMessage, pingMultiMessage, pongMessage, pongMultiMessage } = getPingPongComponentCreator();
+        const pingHandler = createHandler({
+            message: pingMessage,
+            input: pingChannel,
+            outputs: {
+                output: [
+                    [ pongChannel, [ pongMessage ] ],
+                ],
+                failures: [ 'NoPaddle' ],
+            },
+            execute: (api) => async (incoming) => {
+                api.send.pong(incoming.streamName.id).Pong();
+                return api.success();
+            },
         });
-        const dispatcher = Dispatcher.fromComponent(component);
+        const pingMultiHandler = createHandler({
+            message: pingMultiMessage,
+            input: pingChannel,
+            outputs: {
+                output: [
+                    [ pongChannel, [ pongMultiMessage ] ],
+                ],
+                failures: [ 'NoPaddle' ],
+            },
+            execute: (api) => async (incoming) => {
+                api.send.pong(incoming.streamName.id).PongMultiple(incoming.message.payload);
+                return api.success();
+            },
+        });
+
+        const pingPongSubscription = createSubscription('ping-pong', pingChannel, [pongChannel], {
+            Ping: pingHandler,
+            PingMultiple: pingMultiHandler,
+        })
+
+        const component = create([pingPongSubscription]);
+        // TODO(adam): Type inference here
+        const dispatcher = Dispatcher.fromComponent<any, typeof pingChannel, typeof pongChannel>(component);
         await messageStore.logMessage({
             traceId,
             streamName: { service: 'my-service', channel: 'ping', id },

@@ -1,12 +1,11 @@
-import { AnyMessage, generateMessageId, MessageType, OutgoingMessage, StoredMessage, TraceId } from '../message';
-import { AggregateId, AnyChannelSchema, channelEquals, ChannelMessageSchema, ChannelTags, streamEquals } from '../stream';
+import { AnyMessage, generateMessageId, OutgoingMessage, StoredMessage, TraceId } from '../message';
+import { AggregateId, channelEquals, streamEquals } from '../stream';
 import { concat, concatMap, distinct, filter, from, fromEvent, map, Observable, shareReplay, Subscription } from 'rxjs';
 import { EventEmitter } from 'events';
 import { Dispatcher } from './dispatcher';
-import { Component, ComponentConfig } from '../component';
-import { Aggregate, AggregateConfig, AggregateMessageType, ProjectionResultWithVersion, SomeAggregateConfig } from '../aggregate';
-import { HandlerTags } from '../component/handler';
-import { SchemaType } from '../schema';
+import { SomeComponent } from '../component';
+// import { Aggregate, AggregateConfig, ProjectionResultWithVersion } from '../aggregate';
+import { AnyChannelSchema } from '../schema/channel';
 
 interface LogResult {
     readonly id: AggregateId;
@@ -14,13 +13,13 @@ interface LogResult {
     readonly depth: number;
 }
 
-export type AggregateResult<S extends SchemaType, FR extends string> = ProjectionResultWithVersion<S, FR>;
+// export type AggregateResult<S extends SchemaType, FR extends string> = ProjectionResultWithVersion<S, FR>;
 
 interface MessageStoreDB {
     logMessage(message: OutgoingMessage<AnyMessage>): Promise<LogResult>;
     getTrace(traceId: TraceId): Promise<StoredMessage<AnyMessage>[]>;
-    getAggregateStream: <S extends SchemaType, Out extends AnyChannelSchema>(config: AggregateConfig<string, S, AnyChannelSchema, Out, HandlerTags<Out>>) => (id: AggregateId) =>
-        Observable<StoredMessage<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>>
+    // getAggregateStream: <S extends SchemaType, Out extends AnyChannelSchema>(config: AggregateConfig<string, S, AnyChannelSchema, Out, HandlerTags<Out>>) => (id: AggregateId) =>
+    //     Observable<StoredMessage<MessageType<ChannelSchemas<Out>>>>
     getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>>;
 }
 
@@ -47,29 +46,29 @@ export class InMemoryMessageStoreDB implements MessageStoreDB {
         return this._log.filter(m => m.traceId === traceId);
     }
 
-    public getAggregateStream<S extends SchemaType, Out extends AnyChannelSchema>(
-        config: AggregateConfig<string, S, AnyChannelSchema, Out, HandlerTags<Out>>
-    ): (id: AggregateId) => Observable<StoredMessage<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>> {
-        type Msg = StoredMessage<MessageType<ChannelMessageSchema<Out, ChannelTags<Out>>>>;
-        const fn = (id: AggregateId) => {
-            const match = (msg: Msg) => {
-                return (
-                    Object.keys(config.schema.events).some(key => {
-                        const eventSchema = (config.schema.events as any)[key];
-                        return (
-                            eventSchema.service === msg.streamName.service
-                            && eventSchema._tag === msg.streamName.channel
-                            && id === msg.streamName.id
-                        );
-                    })
-                );
-            };
-            return from(this._log as Msg[]).pipe(
-                filter(msg => match(msg)),
-            );
-        }
-        return fn;
-    }
+    // public getAggregateStream<S extends SchemaType, Out extends AnyChannelSchema>(
+    //     config: AggregateConfig<string, S, AnyChannelSchema, Out, HandlerTags<Out>>
+    // ): (id: AggregateId) => Observable<StoredMessage<MessageType<ChannelSchemas<Out>>>> {
+    //     type Msg = StoredMessage<MessageType<ChannelSchemas<Out>>>;
+    //     const fn = (id: AggregateId) => {
+    //         const match = (msg: Msg) => {
+    //             return (
+    //                 Object.keys(config.schema.events).some(key => {
+    //                     const eventSchema = (config.schema.events as any)[key];
+    //                     return (
+    //                         eventSchema.service === msg.streamName.service
+    //                         && eventSchema._tag === msg.streamName.channel
+    //                         && id === msg.streamName.id
+    //                     );
+    //                 })
+    //             );
+    //         };
+    //         return from(this._log as Msg[]).pipe(
+    //             filter(msg => match(msg)),
+    //         );
+    //     }
+    //     return fn;
+    // }
 
     public getDispatcherStream<M extends AnyMessage>(dispatcher: Dispatcher<M>): Observable<StoredMessage<M>> {
         return from(this._log.filter(msg => dispatcher.filter(msg))) as Observable<StoredMessage<M>>;
@@ -137,8 +136,8 @@ export class MessageStore implements MessageStore {
         this._subscriptions.push(sub);
     }
 
-    public bindComponent<C extends ComponentConfig<string, In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(component: Component<C, In, Out, string>): void {
-        const dispatcher = Dispatcher.fromComponent(component);
+    public bindComponent<C extends SomeComponent<In, Out>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(component: C): void {
+        const dispatcher = Dispatcher.fromComponent<C, In, Out>(component);
         this.bindDispatcher(dispatcher);
         this.bindOutputStream(component.outbox.pipe(
             map((outgoing) => {
@@ -157,19 +156,19 @@ export class MessageStore implements MessageStore {
         ));
     }
 
-    public bindAggregate<A extends AggregateConfig<string, S, In, Out, OutTags>, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>>(aggregate: Aggregate<A['name'], S, In, Out, OutTags, string>): void {
-        this.bindComponent(aggregate.component as any);
-    }
+    // public bindAggregate<A extends AggregateConfig<string, S, In, Out, OutTags>, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>>(aggregate: Aggregate<A['name'], S, In, Out, OutTags, string>): void {
+    //     this.bindComponent(aggregate.component as any);
+    // }
 
-    public getAggregate<N extends string, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>, FR extends string>(
-        aggregate: Aggregate<N, S, In, Out, OutTags, FR>,
-    ): (id: AggregateId) => Promise<AggregateResult<S, FR>> {
-        return async (id: AggregateId) => {
-            const stream = this._db.getAggregateStream<S, Out>(aggregate.config as any)(id);
-            const result = await aggregate.hydrate(id, stream as any);
-            return result as AggregateResult<S, FR>;
-        }
-    }
+    // public getAggregate<N extends string, S extends SchemaType, In extends AnyChannelSchema, Out extends AnyChannelSchema, OutTags extends HandlerTags<Out>, FR extends string>(
+    //     aggregate: Aggregate<N, S, In, Out, OutTags, FR>,
+    // ): (id: AggregateId) => Promise<AggregateResult<S, FR>> {
+    //     return async (id: AggregateId) => {
+    //         const stream = this._db.getAggregateStream<S, Out>(aggregate.config as any)(id);
+    //         const result = await aggregate.hydrate(id, stream as any);
+    //         return result as AggregateResult<S, FR>;
+    //     }
+    // }
 
     public async stopDispatchers(): Promise<void> {
         await Promise.all(this._subscriptions.map(async sub => {

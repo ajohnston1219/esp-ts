@@ -1,3 +1,4 @@
+import { Component, ComponentConfig, SomeComponent } from "../component";
 import { AnyMessage, IncomingMessage, MessageType, StoredMessage } from "../message";
 import { AnyChannelSchema, ChannelSchemas } from "../schema/channel";
 import { AnyMessageSchemaArray, AnySubscription, getSubscriptionAPI, HandlerOutput, InOutMap, SubscriptionHandler } from "../schema/subscription";
@@ -36,6 +37,17 @@ export class Dispatcher<M extends AnyMessage> {
                 const api = getSubscriptionAPI(incoming.traceId, incoming.message._tag, subscription);
                 await handler.execute(api)(incoming);
             }
+        }
+        return new Dispatcher(subscriptions, handler);
+    }
+
+    public static fromComponent<C extends Component<ComponentConfig<string, In, Out>, In, Out, string>, In extends AnyChannelSchema, Out extends AnyChannelSchema>(component: C) {
+        const subscriptions: DispatcherSubscription[] = component.config.subscriptions.map(([_, c]) => ({
+            channel: { service: c.input.service, channel: c.input.name },
+            offset: 0,
+        }))
+        const handler: HandlerFunction<MessageType<ChannelSchemas<In>>> = async (incoming) => {
+            component.recv(incoming);
         }
         return new Dispatcher(subscriptions, handler);
     }

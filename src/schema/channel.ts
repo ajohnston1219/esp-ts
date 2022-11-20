@@ -16,24 +16,13 @@ export const defineChannel = <N extends string, M extends [...AnyMessageSchema[]
     ...defineSet(name, ...messages),
 });
 
-export type IgnoreChannel = ChannelSchema<'__IGNORE__', NoMessageSchema, '__LOCAL__'>;
-export const ignoreChannel = (): { '__IGNORE__': IgnoreChannel } => ({
-    '__IGNORE__': {
-        service: '__LOCAL__',
-        name: '__IGNORE__',
-        schemas: [
-            defineMessage('__IGNORE__', z.undefined()),
-        ],
-    },
-});
-
 export type ChannelName<Schema extends AnyChannelSchema> = Schema['name'];
 export type ChannelNames<Schema extends AnyChannelSchema> = Schema['name'];
 export type ChannelSchemas<Schema extends AnyChannelSchema> = Schema['schemas'][number];
 export type ChannelTags<Schema extends AnyChannelSchema> = MessageTag<ChannelSchemas<Schema>>;
 export type ChannelPayloads<Schema extends AnyChannelSchema> = MessagePayload<ChannelSchemas<Schema>>;
 export type ChannelMessages<Schema extends AnyChannelSchema> = {
-    [M in Schema['schemas'][number] as M[0]]: MessageType<M>;
+    [M in Schema['schemas'][number]as M[0]]: MessageType<M>;
 }
 export type GetChannelMessage<Schema extends AnyChannelSchema, Tag extends Schema['schemas'][number][0]> =
     ChannelMessages<Schema>[Tag];

@@ -1,8 +1,10 @@
-import { AnyChannelSchema, ignoreChannel, IgnoreChannel } from '../stream';
-import { KeysOfUnion } from '../utils/types';
-import { Component, ComponentConfig, ComponentHandlerFunction, ComponentMessageTypes, ComponentType, createComponent } from '../component';
-import { AnySchemaDefinition, define, GetTaggedObject, SchemaDefinition, SchemaType, TypeOfSchema } from '../schema';
-import { AnyModel, Model } from './model';
+import { Component, ComponentConfig, ComponentSubscriptions, createComponent, IgnoreChannel, ignoreChannel } from '../component';
+import { SchemaType } from '../schema';
+import { AnyModel } from './model';
+import { AnyChannelSchema, ChannelNames, ChannelSchemas } from '../schema/channel';
+import { GetObject, TaggedArray, TaggedObject } from '../schema/tagged';
+import { MessageType } from '../message';
+import { AnySubscription } from '../schema/subscription';
 
 export type ViewResultSuccess<T extends SchemaType> = {
     readonly _tag: 'Success';
@@ -17,9 +19,7 @@ export type ViewResultFailure<FR extends string> = {
 export interface ViewSchema<
     EventSchema extends AnyChannelSchema,
 > {
-    readonly events: {
-        [Tag in EventSchema['_tag']]: GetTaggedObject<EventSchema, Tag>;
-    };
+    readonly events: TaggedArray<TaggedObject<EventSchema['name'], EventSchema>>;
 }
 export type AnyViewSchema = ViewSchema<AnyChannelSchema>;
 
@@ -30,15 +30,15 @@ export interface ViewConfig<Name extends string, V extends AnyViewSchema, M exte
 }
 export type AnyViewConfig = ViewConfig<string, AnyViewSchema, AnyModel>;
 
-export type ChannelKeys<V extends AnyViewSchema> = KeysOfUnion<V['events']>;
-export type EventSchemas<V extends AnyViewSchema, N extends KeysOfUnion<V['events']>> = V['events'][N];
-export type EventSchema<V extends AnyViewSchema, N extends ChannelKeys<V>> = EventSchemas<V, N>;
-export type ViewMessageType<A extends AnyViewConfig> = ComponentMessageTypes<ViewComponent<A>, 'In'>;
+export type EventChannel<V extends AnyViewSchema> = GetObject<V['events'][number]>;
+export type EventKeys<V extends AnyViewSchema> = ChannelNames<EventChannel<V>>;
+export type EventSchemas<V extends AnyViewSchema> = ChannelSchemas<EventChannel<V>>;
+export type ViewMessageType<V extends AnyViewConfig> = MessageType<ChannelSchemas<EventChannel<V['schema']>>>;
 
 export type ViewComponent<V extends AnyViewConfig> =
     ComponentConfig<
         V['name'],
-        EventSchemas<V['schema'], ChannelKeys<V['schema']>>,
+        EventChannel<V['schema']>,
         IgnoreChannel
     >;
 
@@ -49,23 +49,19 @@ export interface View<Config extends AnyViewConfig, In extends AnyChannelSchema,
     readonly model: Config['model'];
 }
 
-export type ViewHandlerFunction<C extends ComponentConfig<string, In, IgnoreChannel>, In extends AnyChannelSchema, M extends AnyModel, FR extends string> =
-    (model: M) => ComponentHandlerFunction<C, In, IgnoreChannel, FR, false>;
-
-
-
 export function createView<N extends string, In extends AnyChannelSchema, M extends AnyModel, FailureReason extends string>(
     config: ViewConfig<N, ViewSchema<In>, M>,
-    handler: ViewHandlerFunction<ComponentConfig<N, In, IgnoreChannel>, In, M, FailureReason>,
+    subscriptions: ComponentSubscriptions<AnySubscription<In, IgnoreChannel>, In, IgnoreChannel>,
 ): View<ViewConfig<N, ViewSchema<In>, M>, In, FailureReason> {
 
-    type Out = ReturnType<typeof ignoreChannel>['__IGNORE__'];
+    type Out = IgnoreChannel;
     type Comp = ComponentConfig<N, In, Out>;
     const component: Component<Comp, In, Out, FailureReason> = createComponent({
         name: config.name,
-        inputChannels: config.schema.events as any,
+        inputChannels: config.schema.events,
         outputChannels: ignoreChannel(),
-    },  handler(config.model));
+        subscriptions,
+    });
 
     return {
         config,

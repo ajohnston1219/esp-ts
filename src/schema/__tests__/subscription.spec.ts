@@ -1,72 +1,81 @@
 import { z } from "zod";
-import { define } from "..";
-import { AnyMessage } from "../../message";
+import { AnyMessage, defineMessage, generateTraceId, MessageResult } from "../../message";
+import { generateId } from "../../stream";
 import { defineChannel } from "../channel";
-import { createHandler, createSubscription, SubscriptionInputMessage } from '../subscription';
+import { createHandler, createSubscription, getSubscriptionAPI } from '../subscription';
 
 describe('Subscription', () => {
 
     it('properly creates a subscription', async () => {
         // Arrange
-        const pingChannel = defineChannel('my-service', 'ping',
-            define('Ping', z.void()),
-            define('PingMultiple', z.number().positive()),
-        );
-        const pongChannel = defineChannel('my-service', 'pong',
-            define('Pong', z.void()),
-            define('PongMultiple', z.number().positive()),
-        );
-        const otherChannel = defineChannel('my-service', 'other',
-            define('Other', z.number()),
-            define('Other_2', z.number()),
-        );
+        const pingMessage = defineMessage('Ping', z.void());
+        const pingMultiMessage = defineMessage('PingMultiple', z.number());
+        const pingChannel = defineChannel('my-service', 'ping', pingMessage, pingMultiMessage);
+
+        const pongMessage = defineMessage('Pong', z.void());
+        const pongMultiMessage = defineMessage('PongMultiple', z.number());
+        const pongChannel = defineChannel('my-service', 'pong', pongMessage, pongMultiMessage);
+
+        const otherMessage = defineMessage('Other', z.number());
+        const otherMessage_2 = defineMessage('Other_2', z.number());
+        const otherChannel = defineChannel('my-service', 'other', otherMessage, otherMessage_2);
+
         const pingHandler = createHandler({
-            tag: 'Ping',
+            message: pingMessage,
             input: pingChannel,
             outputs: {
                 output: [
-                    [ pongChannel, [
-                        pongChannel.schema.Pong,
-                        pongChannel.schema.PongMultiple,
-                    ]],
+                    [ pongChannel, [ pongMessage ]],
                 ],
                 failures: ['NoPaddle'],
             },
             execute: (api) => async (incoming) => {
-                api.send.pong(incoming.streamName.id).PongMultiple(5);
                 api.send.pong(incoming.streamName.id).Pong();
                 return api.success();
             },
         });
+
         const pingMultiHandler = createHandler({
-            tag: 'PingMultiple',
+            message: pingMultiMessage,
             input: pingChannel,
             outputs: {
                 output: [
-                    [ pongChannel, [pongChannel.schema.PongMultiple] ],
-                    [ otherChannel, [otherChannel.schema.Other] ],
+                    [ pongChannel, [ pongMultiMessage ] ],
                 ],
                 failures: ['NoPaddle'],
             },
             execute: (api) => async (incoming) => {
                 api.send.pong(incoming.streamName.id).PongMultiple(incoming.message.payload);
-                api.send.other(incoming.streamName.id).Other(incoming.message.payload);
                 return api.success();
             },
         });
 
-        const sub = createSubscription(pingChannel, [pongChannel, otherChannel], {
+        const sub = createSubscription('ping-pong', pingChannel, [pongChannel, otherChannel], {
             Ping: pingHandler,
             PingMultiple: pingMultiHandler,
         });
 
-        type IM = SubscriptionInputMessage<typeof pingChannel>;
-        type _Is = IM extends AnyMessage ? true : false;
+        const id = generateId();
+        const messageId = generateId();
+        const tId = generateTraceId();
+        const received: MessageResult<AnyMessage>[] = [];
+        const api = getSubscriptionAPI(tId, 'Ping', sub, {
+            after: [msg => received.push(msg)],
+        });
 
         // Act
-        console.log('sub', sub);
+        await sub.handle.Ping.execute(api)({
+            id: messageId, traceId: tId, version: 0,
+            streamName: { service: '__LOCAL__', channel: 'ping', id },
+            message: { _tag: 'Ping', payload: undefined },
+        });
 
         // Assert
+        expect(received.length).toBe(1);
+        const { traceId, message, streamName } = received[0];
+        expect(traceId).toBe(tId);
+        expect(message).toStrictEqual({ _tag: 'Pong' });
+        expect(streamName).toStrictEqual({ service: 'my-service', channel: 'pong', id });
     })
 
 })

@@ -1,14 +1,15 @@
 import { z } from 'zod';
-import { defineChannel, generateId, getMessageCreators } from '..';
-import { generateTraceId } from '../../message';
+import { generateId, getMessageCreators } from '..';
+import { defineMessage, generateTraceId } from '../../message';
 import { define } from '../../schema';
+import { defineChannel } from '../../schema/channel';
 
 describe('Channel', () => {
     it('Properly creates channel definition', () => {
         // Arrange
         const channelSchema = defineChannel('my-service', 'math',
-            define('Add', z.object({ amount: z.number() })),
-            define('Subtract', z.object({ amount: z.number() })),
+            defineMessage('Add', z.object({ amount: z.number() })),
+            defineMessage('Subtract', z.object({ amount: z.number() })),
         );
 
         // Act
